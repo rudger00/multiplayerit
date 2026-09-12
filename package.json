@@ -13,5 +13,10 @@
   "type": "commonjs",
   "devDependencies": {
     "concurrently": "^10.0.5"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.116.0",
+    "react-quill": "^2.0.0",
+    "react-router-dom": "^7.18.3"
   }
 }
