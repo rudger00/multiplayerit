@@ -1,6 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-
+import PaginaLive from './pages/PaginaLive';
 // Importa i nuovi componenti
 import { AuthProvider } from './context/AuthContext';
 import LoginModal from './components/LoginModal';
@@ -13,7 +13,7 @@ import PaginaPiattaforma from './pages/PaginaPiattaforma';
 import PaginaCategoria from './pages/PaginaCategoria';
 import PaginaGiochi from './pages/PaginaGiochi';
 import PaginaEditor from './pages/PaginaEditor';
-
+import PaginaProfilo from './pages/PaginaProfilo';
 export default function App() {
   return (
     <AuthProvider>
@@ -31,6 +31,8 @@ export default function App() {
             <Route path="/editor" element={<PaginaEditor />} />
             <Route path="/:slug" element={<PaginaPiattaforma />} />
             <Route path="/gioco/:id" element={<PaginaGioco />} />
+            <Route path="/live" element={<PaginaLive />} />
+            <Route path="/profilo" element={<PaginaProfilo />} />
           </Routes>
         </div>
       </Router>

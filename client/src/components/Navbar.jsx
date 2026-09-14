@@ -89,7 +89,7 @@ export default function Navbar() {
           </span>
         </Link>
         {!isSearchOpen && (
-          <Link to="/live" className="hidden lg:flex h-full items-center justify-center bg-[#ff2020] text-white px-3 hover:bg-red-700 transition-colors cursor-pointer text-xs font-black tracking-widest">
+          <Link to="/live" onClick={closeAll} className="hidden lg:flex h-full items-center justify-center bg-[#ff2020] text-white px-3 hover:bg-red-700 transition-colors cursor-pointer text-xs font-black tracking-widest">
             <LiveIcon /> LIVE
           </Link>
         )}
@@ -189,7 +189,6 @@ export default function Navbar() {
           </li>
 
           <li className="h-full flex items-center px-3 hover:text-gray-300 cursor-pointer transition-colors uppercase">VIDEO</li>
-          <li className="h-full flex items-center px-3 hover:text-gray-300 cursor-pointer transition-colors uppercase">LIVE</li>
           <li className="relative h-full flex items-center">
             <Link to="/giochi" onClick={closeAll} className="px-3 hover:text-gray-300 transition-colors uppercase h-full flex items-center">GIOCHI</Link>
           </li>
@@ -226,10 +225,13 @@ export default function Navbar() {
                   <span onClick={() => { logout(); closeAll(); }} className="text-[#ff2020] text-[11px] font-black uppercase tracking-widest cursor-pointer hover:text-white transition-colors">Logout</span>
                 </div>
 
-                {/* Info Utente */}
-                <div className="p-5 flex items-center justify-between relative">
+                {/* Info Utente CLICCABILE */}
+                <div 
+                  onClick={() => { closeAll(); navigate('/profilo'); }}
+                  className="p-5 flex items-center justify-between relative cursor-pointer hover:bg-white/5 transition-colors group"
+                >
                   <div className="flex items-center gap-4">
-                    <div className="relative">
+                    <div className="relative group-hover:scale-105 transition-transform">
                       <div className="w-[60px] h-[60px] rounded-full border-[3px] border-gray-600 bg-[#2a2a2a] flex items-center justify-center">
                         <UserIcon />
                       </div>

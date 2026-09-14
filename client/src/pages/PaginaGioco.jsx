@@ -1,24 +1,25 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { getImg } from '../utils/helpers';
 import { useAuth } from '../context/AuthContext';
 
 export default function PaginaGioco() {
   const { id } = useParams();
+  const location = useLocation();
+  const navigate = useNavigate(); // Aggiunto per pulire lo stato di React Router
   const { user, openModal } = useAuth();
   
   const [game, setGame] = useState(null);
   const [articles, setArticles] = useState([]);
   const [loading, setLoading] = useState(true);
   
-  // Stati per la UI
-  const [activeTab, setActiveTab] = useState('gioco');
+  const [activeTab, setActiveTab] = useState(location.state?.tab || 'gioco');
   const [showVoteDropdown, setShowVoteDropdown] = useState(false);
   const [myVote, setMyVote] = useState(5.0);
   const voteRef = useRef(null);
+  const hasScrolled = useRef(false); // Memorizza se lo scroll automatico è già stato fatto
 
-  // Stati per YouTube e Immagini
   const [youtubeVideos, setYoutubeVideos] = useState([]);
   const [mainVideo, setMainVideo] = useState(null);
   const [loadingVideos, setLoadingVideos] = useState(false);
@@ -26,6 +27,9 @@ export default function PaginaGioco() {
   const [gameImages, setGameImages] = useState([]);
   const [totalImages, setTotalImages] = useState(35);
   const [loadingImages, setLoadingImages] = useState(false);
+
+  const [isLightboxOpen, setIsLightboxOpen] = useState(false);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   useEffect(() => {
     async function fetchData() {
@@ -62,15 +66,17 @@ export default function PaginaGioco() {
       }
 
       setLoading(false);
+      
+      if (!location.state?.scrollTo) {
+        window.scrollTo(0, 0);
+      }
     }
-    window.scrollTo(0, 0);
     fetchData();
-  }, [id, user]);
+  }, [id, user, location.state]);
 
-  // YouTube API Call
   useEffect(() => {
     async function fetchYouTubeVideos() {
-      if (activeTab === 'video' && youtubeVideos.length === 0 && game) {
+      if (youtubeVideos.length === 0 && game) {
         setLoadingVideos(true);
         const API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY || ''; 
         const query = encodeURIComponent(`${game.titolo} official trailer ita`);
@@ -89,23 +95,25 @@ export default function PaginaGioco() {
       }
     }
     fetchYouTubeVideos();
-  }, [activeTab, game, youtubeVideos.length]);
+  }, [game, youtubeVideos.length]);
 
-  // Caricamento immagini dinamico tramite Unsplash (senza errori 403)
   useEffect(() => {
     async function fetchGameImages() {
       if (activeTab === 'video' && gameImages.length === 0 && game) {
         setLoadingImages(true);
         try {
-          const keyword = encodeURIComponent(`${game.titolo} video game wallpaper`);
-          const res = await fetch(`https://api.unsplash.com/search/photos?query=${keyword}&per_page=6&client_id=demo`);
+          const UNSPLASH_KEY = import.meta.env.VITE_UNSPLASH_API_KEY || '';
+          if (!UNSPLASH_KEY) throw new Error("Chiave API Unsplash non trovata");
+
+          const keyword = encodeURIComponent(`${game.titolo} video game`);
+          const res = await fetch(`https://api.unsplash.com/search/photos?query=${keyword}&per_page=6&client_id=${UNSPLASH_KEY}`);
           const data = await res.json();
           
           if (data.results && data.results.length >= 6) {
             setGameImages(data.results.map(photo => photo.urls.regular));
             setTotalImages(data.total || 35);
           } else {
-            throw new Error("Fallback");
+            throw new Error("Immagini non sufficienti");
           }
         } catch (error) {
           const fallbackImg = getImg(game.url_immagine);
@@ -118,6 +126,19 @@ export default function PaginaGioco() {
     fetchGameImages();
   }, [activeTab, game, gameImages.length]);
 
+  // AUTOSCROLL CORRETTO: Avviene solo 1 volta grazie a hasScrolled.current
+  useEffect(() => {
+    if (location.state?.scrollTo === 'immagini' && activeTab === 'video' && gameImages.length > 0 && !hasScrolled.current) {
+      setTimeout(() => {
+        const sezioneImmagini = document.getElementById('sezione-immagini');
+        if (sezioneImmagini) {
+          sezioneImmagini.scrollIntoView({ behavior: 'smooth' });
+          hasScrolled.current = true; // Segna che lo scroll è stato completato
+        }
+      }, 500); 
+    }
+  }, [location.state, activeTab, gameImages.length]);
+
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (voteRef.current && !voteRef.current.contains(event.target)) setShowVoteDropdown(false);
@@ -125,6 +146,17 @@ export default function PaginaGioco() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (!isLightboxOpen) return;
+      if (e.key === 'Escape') closeLightbox();
+      if (e.key === 'ArrowRight') nextImage(e);
+      if (e.key === 'ArrowLeft') prevImage(e);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isLightboxOpen]);
 
   const handleSaveVote = async () => {
     if (!user) {
@@ -151,6 +183,20 @@ export default function PaginaGioco() {
     setShowVoteDropdown(false);
   };
 
+  const openLightbox = (index) => {
+    setCurrentImageIndex(index);
+    setIsLightboxOpen(true);
+  };
+  const closeLightbox = () => setIsLightboxOpen(false);
+  const nextImage = (e) => {
+    if(e) e.stopPropagation();
+    setCurrentImageIndex((prev) => (prev + 1) % gameImages.length);
+  };
+  const prevImage = (e) => {
+    if(e) e.stopPropagation();
+    setCurrentImageIndex((prev) => (prev - 1 + gameImages.length) % gameImages.length);
+  };
+
   if (loading) return <div className="text-white p-10 text-center font-bold">Caricamento gioco...</div>;
   if (!game) return <div className="text-white p-10 text-center font-bold">Gioco non trovato.</div>;
 
@@ -158,6 +204,13 @@ export default function PaginaGioco() {
   const releaseDate = game.data_uscita ? new Date(game.data_uscita).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Da definire';
   const platforms = game.gioco_piattaforma?.map(p => p.piattaforme.nome).join(' - ') || 'Non specificate';
   const genres = game.giochi_generi?.map(g => g.generi.nome).join(', ') || 'Non specificato';
+  
+  const sviluppatore = game.sviluppatore || 'Non specificato';
+  const publisher = game.publisher || 'Non specificato';
+  const giocatori = game.giocatori || 'Non specificato';
+  const lingua = game.lingua || 'Non specificata';
+  const pegi = game.pegi || 'Non classificato';
+  const supporto = game.supporto || 'Fisico / Digitale';
   
   const reviews = articles.filter(a => a.categorie?.nome === 'Recensione');
   const news = articles.filter(a => a.categorie?.nome !== 'Recensione');
@@ -167,7 +220,14 @@ export default function PaginaGioco() {
   
   const TabButton = ({ id, label }) => (
     <button 
-      onClick={() => setActiveTab(id)}
+      onClick={() => {
+        setActiveTab(id);
+        // Quando l'utente clicca un tab, PULIAMO la memoria del router 
+        // così se torna su "Video", non scrolla più in automatico!
+        if (location.state) {
+          navigate(location.pathname, { replace: true, state: {} });
+        }
+      }}
       className={`relative px-4 py-4 cursor-pointer font-black uppercase tracking-widest text-[11px] transition-colors outline-none ${
         activeTab === id ? 'text-white' : 'text-gray-400 hover:text-gray-200'
       }`}
@@ -180,8 +240,54 @@ export default function PaginaGioco() {
   );
 
   return (
-    <div className="bg-[#111111] min-h-screen pb-20">
+    <div className="bg-[#111111] min-h-screen pb-20 relative">
       
+      {/* ================= LIGHTBOX OVERLAY ================= */}
+      {isLightboxOpen && gameImages.length > 0 && (
+        <div 
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 backdrop-blur-sm"
+          onClick={closeLightbox}
+        >
+          <button 
+            className="absolute top-6 left-6 text-white hover:text-[#ff2020] transition-colors p-2 z-[110]"
+            onClick={(e) => { e.stopPropagation(); closeLightbox(); }}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+          
+          <button 
+            className="absolute left-4 md:left-10 text-white hover:text-[#ff2020] transition-colors p-4 z-[110]"
+            onClick={prevImage}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          
+          <img 
+            src={gameImages[currentImageIndex]} 
+            alt={`Screenshot ${currentImageIndex + 1}`} 
+            className="max-w-[90vw] max-h-[90vh] object-contain select-none shadow-2xl"
+            onClick={(e) => e.stopPropagation()} 
+          />
+          
+          <button 
+            className="absolute right-4 md:right-10 text-white hover:text-[#ff2020] transition-colors p-4 z-[110]"
+            onClick={nextImage}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+          
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-gray-400 font-bold tracking-widest text-sm">
+            {currentImageIndex + 1} / {gameImages.length}
+          </div>
+        </div>
+      )}
+
       {/* HEADER */}
       <div className="relative w-full h-[350px] md:h-[400px] flex justify-center pt-8">
         <div className="absolute inset-0 bg-cover bg-center bg-no-repeat blur-xl opacity-40 scale-110" style={{ backgroundImage: `url(${coverUrl})` }}></div>
@@ -259,10 +365,12 @@ export default function PaginaGioco() {
         {activeTab === 'gioco' && (
           <>
             <div className="text-gray-300 text-sm font-semibold leading-relaxed mb-12 text-left">
-              <p className="mb-2"><strong className="text-white">{game.titolo}</strong> è un titolo sviluppato da Team Cherry.</p>
+              <p className="mb-2">
+                <strong className="text-white">{game.titolo}</strong> è un titolo sviluppato da {sviluppatore !== 'Non specificato' ? sviluppatore : 'vari sviluppatori'}.
+              </p>
               <p>
                 {game.descrizione || "Descrizione non disponibile al momento."}
-                <span className="text-[#ff2020] cursor-pointer hover:underline ml-2 font-bold">Leggi tutto</span>
+                {game.descrizione && <span className="text-[#ff2020] cursor-pointer hover:underline ml-2 font-bold">Leggi tutto</span>}
               </p>
             </div>
 
@@ -324,7 +432,7 @@ export default function PaginaGioco() {
                       </div>
                       <div className="p-5 flex flex-col flex-grow text-left">
                         <h3 className="text-white font-black text-2xl leading-tight mb-3 group-hover:text-[#ff2020] transition-colors">{featuredArticle.titolo}</h3>
-                        <p className="text-gray-400 text-sm font-semibold line-clamp-3 mb-4">Approfondimento e discussione sul titolo più atteso del momento. Scopriamo le ultime novità e cosa ne pensa la community.</p>
+                        <p className="text-gray-400 text-sm font-semibold line-clamp-3 mb-4">Scopri tutte le novità, le analisi e cosa ne pensa la nostra community di questo titolo.</p>
                         <div className="mt-auto flex items-center justify-between text-[10px] font-black uppercase tracking-widest">
                           <span className="text-[#ff2020]">{featuredArticle.categorie?.nome || 'Notizia'}</span>
                           <span className="text-gray-500">{new Date(featuredArticle.creato_il).toLocaleDateString('it-IT')}</span>
@@ -359,6 +467,7 @@ export default function PaginaGioco() {
               <p className="text-center text-gray-500 mb-16">Nessun articolo trovato per questo gioco.</p>
             )}
 
+            {/* INFORMAZIONI DINAMICHE DAL DATABASE */}
             <div className="bg-[#1a1a1a] border-t-2 border-[#ff2020] p-8 flex flex-col md:flex-row gap-8 mb-10 shadow-lg text-left">
               <div className="md:w-1/3">
                 <h3 className="text-[#ff2020] font-black text-xl leading-tight mb-4">Informazioni dettagliate<br/>di {game.titolo}</h3>
@@ -372,15 +481,17 @@ export default function PaginaGioco() {
               
               <div className="md:w-2/3 grid grid-cols-2 text-xs font-semibold gap-y-2">
                 <span className="text-gray-400">Sviluppato da:</span>
-                <span className="text-white font-bold">Team Cherry</span>
+                <span className="text-white font-bold">{sviluppatore}</span>
+                <span className="text-gray-400">Publisher:</span>
+                <span className="text-white font-bold">{publisher}</span>
                 <span className="text-gray-400">Giocatori:</span>
-                <span className="text-white font-bold">1</span>
+                <span className="text-white font-bold">{giocatori}</span>
                 <span className="text-gray-400">Lingua:</span>
-                <span className="text-white font-bold">Ita (testi)</span>
+                <span className="text-white font-bold">{lingua}</span>
                 <span className="text-gray-400">PEGI:</span>
-                <span className="text-white font-bold">7+</span>
+                <span className="text-white font-bold">{pegi}</span>
                 <span className="text-gray-400">Supporto:</span>
-                <span className="text-white font-bold">Download</span>
+                <span className="text-white font-bold">{supporto}</span>
               </div>
             </div>
           </>
@@ -520,8 +631,8 @@ export default function PaginaGioco() {
               <p className="text-center text-gray-500 mb-16">Video non disponibili.</p>
             )}
 
-            {/* SEZIONE TUTTE LE IMMAGINI CON GRIGLIA ASIMMETRICA */}
-            <div className="flex items-center justify-center mb-8">
+            {/* SEZIONE TUTTE LE IMMAGINI (Con ID per lo scroll automatico) */}
+            <div id="sezione-immagini" className="flex items-center justify-center mb-8 pt-8">
               <div className="flex-1 max-w-[300px] h-[1px] bg-gray-600"></div>
               <h2 className="text-white font-black text-lg px-4 uppercase tracking-widest text-center">Tutte le immagini</h2>
               <div className="flex-1 max-w-[300px] h-[1px] bg-gray-600"></div>
@@ -532,27 +643,27 @@ export default function PaginaGioco() {
             ) : gameImages.length >= 6 ? (
               <div className="grid grid-cols-6 gap-0 pb-12">
                 
-                {/* 1. Immagine grande in alto (6 colonne) */}
-                <div className="col-span-6 h-[400px] md:h-[500px] overflow-hidden cursor-pointer">
+                <div className="col-span-6 h-[400px] md:h-[500px] overflow-hidden cursor-pointer" onClick={() => openLightbox(0)}>
                   <img src={gameImages[0]} alt="Screenshot 1" className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" />
                 </div>
                 
-                {/* 2. Immagini centrali (3 colonne ciascuna) */}
-                <div className="col-span-3 h-[200px] md:h-[300px] overflow-hidden cursor-pointer">
+                <div className="col-span-3 h-[200px] md:h-[300px] overflow-hidden cursor-pointer" onClick={() => openLightbox(1)}>
                   <img src={gameImages[1]} alt="Screenshot 2" className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" />
                 </div>
-                <div className="col-span-3 h-[200px] md:h-[300px] overflow-hidden cursor-pointer">
+                
+                <div className="col-span-3 h-[200px] md:h-[300px] overflow-hidden cursor-pointer" onClick={() => openLightbox(2)}>
                   <img src={gameImages[2]} alt="Screenshot 3" className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" />
                 </div>
 
-                {/* 3. Immagini in basso (2 colonne ciascuna, l'ultima con overlay) */}
-                <div className="col-span-2 h-[120px] md:h-[200px] overflow-hidden cursor-pointer">
+                <div className="col-span-2 h-[120px] md:h-[200px] overflow-hidden cursor-pointer" onClick={() => openLightbox(3)}>
                   <img src={gameImages[3]} alt="Screenshot 4" className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" />
                 </div>
-                <div className="col-span-2 h-[120px] md:h-[200px] overflow-hidden cursor-pointer">
+                
+                <div className="col-span-2 h-[120px] md:h-[200px] overflow-hidden cursor-pointer" onClick={() => openLightbox(4)}>
                   <img src={gameImages[4]} alt="Screenshot 5" className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" />
                 </div>
-                <div className="col-span-2 h-[120px] md:h-[200px] relative overflow-hidden cursor-pointer group">
+                
+                <div className="col-span-2 h-[120px] md:h-[200px] relative overflow-hidden cursor-pointer group" onClick={() => openLightbox(5)}>
                   <img src={gameImages[5]} alt="Screenshot 6" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                   <div className="absolute inset-0 bg-[#ff2020]/80 flex items-center justify-center transition-colors hover:bg-[#ff2020]/90">
                     <span className="text-white font-black text-2xl md:text-4xl drop-shadow-md">

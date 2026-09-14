@@ -4,24 +4,8 @@ import { supabase } from '../supabaseClient';
 import { getImg } from '../utils/helpers';
 import { useAuth } from '../context/AuthContext';
 
-const MOCK_REVIEW_DATA = {
-  testo: "Marvel's Wolverine è un titolo che sa divertire, è capace di intrattenere e soprattutto riesce a soddisfare quel desiderio viscerale di fare a pezzi qualsiasi cosa si muova a schermo con gli artigli di adamantio. La reinterpretazione di Logan e il suo legame con Jean Grey regalano momenti di buona narrazione, supportati da un comparto grafico che mostra i muscoli... Tuttavia, l'opera manca di quell'ambizione necessaria a trasformarlo nel titolo immancabile che speravamo di giocare.",
-  pro: [
-    "Combattimento viscerale, brutale e immediatamente divertente",
-    "Ottima reinterpretazione di Logan e del suo rapporto con Jean Grey",
-    "I personaggi, le espressioni e la distruttibilità sono eccellenti",
-    "Ottimo il doppiaggio in italiano"
-  ],
-  contro: [
-    "Estremamente derivativo: non aggiunge nulla al genere",
-    "Struttura troppo rigida, con confini invisibili che inibiscono l'esplorazione",
-    "Una volta completato, rimane ben poco da fare",
-    "C'è un po' troppa sporcizia e le animazioni sono talvolta slegate"
-  ]
-};
-
-const ThumbUp = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M6.956 1.745C7.021.81 7.908.087 8.864.325l.261.066c.463.116.874.456 1.012.965.22.816.533 2.511.062 4.51a9.84 9.84 0 0 1 .443-.051c.713-.065 1.669-.072 2.516.21.518.173.994.681 1.2 1.273.184.532.16 1.162-.234 1.733.058.119.103.242.138.363.077.27.113.567.113.856 0 .289-.036.586-.113.856-.039.135-.09.273-.16.404.169.387.107.819-.003 1.148a3.163 3.163 0 0 1-.488.901c.054.152.076.312.076.465 0 .305-.089.625-.253.912C13.1 15.522 12.437 16 11.5 16H8c-.605 0-1.07-.081-1.466-.218a4.82 4.82 0 0 1-.97-.484l-.048-.03c-.504-.307-.999-.609-2.068-.722C2.682 14.464 2 13.846 2 13V9c0-.85.685-1.432 1.357-1.615.849-.232 1.574-.787 2.132-1.41.56-.627.914-1.28 1.039-1.639.199-.575.356-1.539.428-2.59z"/></svg>;
-const ThumbDown = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M6.956 14.255c.065.935.952 1.658 1.908 1.42l.261-.065a1.379 1.379 0 0 0 1.012-.965c.22-.816.533-2.512.062-4.51.136.02.285.037.443.051.713.065 1.669.072 2.516-.211.518-.173.994-.68 1.2-1.272.184-.532.16-1.162-.234-1.733.058-.12.103-.242.138-.364.077-.27.113-.566.113-.855 0-.289-.036-.586-.113-.855-.039-.135-.09-.273-.16-.404.169-.387.107-.82-.003-1.149a3.162 3.162 0 0 0-.488-.9c.054-.153.076-.313.076-.465 0-.306-.089-.626-.253-.913C13.1.478 12.437 0 11.5 0H8c-.605 0-1.07.081-1.466.218a4.82 4.82 0 0 0-.97.484l-.048.03c-.504.307-.999.609-2.068.722C2.682 1.536 2 2.154 2 3v4c0 .85.685 1.432 1.357 1.615.849.232 1.574.787 2.132 1.41.56.626.914 1.28 1.039 1.638.199.575.356 1.54.428 2.59z"/></svg>;
+const ThumbUp = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg>;
+const ThumbDown = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3"></path></svg>;
 
 export default function PaginaArticolo() {
   const { id } = useParams();
@@ -29,28 +13,34 @@ export default function PaginaArticolo() {
   
   const [article, setArticle] = useState(null);
   const [game, setGame] = useState(null);
-  const [comments, setComments] = useState([]);
-  
-  const [newComment, setNewComment] = useState('');
-  const [replyingTo, setReplyingTo] = useState(null); 
-  
+  const [sidebarArticles, setSidebarArticles] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [scrollProgress, setScrollProgress] = useState(0);
-  const [userVote, setUserVote] = useState('-');
-  
-  const articleBodyRef = useRef(null);
+
+  const [commentsList, setCommentsList] = useState([]);
+  const [newCommentText, setNewCommentText] = useState('');
+  const [replyingTo, setReplyingTo] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const commentInputRef = useRef(null);
+
+  const mockConclusion = {
+    pros: ["Sistema di combattimento bellissimo", "Design eccezionali"],
+    cons: ["Ripetitività estrema", "Troppo guidato"],
+    versioneTestata: "PC, PS5",
+    digitalDelivery: "Steam, PS Store",
+    prezzo: "79,99 €",
+    votoLettori: "8.0"
+  };
 
   const fetchComments = async () => {
     const { data, error } = await supabase
       .from('commenti')
       .select(`
-        id,
-        testo,
-        data,
-        id_commento_padre,
-        upvotes,
-        downvotes,
+        id, 
+        testo, 
+        data, 
+        id_commento_padre, 
+        upvotes, 
+        downvotes, 
         utenti!id_utente ( username, id_ruolo ) 
       `)
       .eq('id_articolo', parseInt(id))
@@ -58,63 +48,67 @@ export default function PaginaArticolo() {
 
     if (error) {
       console.error("Errore fetch commenti:", error);
-      alert("Errore nel caricare i commenti dal database: " + error.message);
     } else if (data) {
-      setComments(data);
+      setCommentsList(data);
     }
   };
 
   useEffect(() => {
-    async function fetchArticolo() {
+    async function fetchData() {
       setLoading(true);
-      const { data, error } = await supabase
+      
+      const { data: articleData } = await supabase
         .from('articoli')
-        .select(`*, categorie ( nome )`)
+        .select(`*, categorie(nome)`)
         .eq('id', parseInt(id))
         .single();
+
+      if (articleData) {
+        setArticle(articleData);
         
-      if (!error && data) {
-        setArticle(data);
-        if (data.id_gioco) {
-          const { data: gameData } = await supabase
-            .from('giochi')
-            .select('titolo, url_immagine, giochi_generi(generi(nome)), gioco_piattaforma(piattaforme(nome))')
-            .eq('id', data.id_gioco)
-            .single();
+        if (articleData.id_gioco) {
+          const { data: gameData } = await supabase.from('giochi').select('*').eq('id', articleData.id_gioco).single();
           if (gameData) setGame(gameData);
         }
+
+        const { data: sideData } = await supabase.from('articoli').select(`id, titolo, url_immagine, creato_il`).neq('id', parseInt(id)).order('creato_il', { ascending: false }).limit(6);
+        if (sideData) setSidebarArticles(sideData);
+
         await fetchComments();
       }
+
       setLoading(false);
+      window.scrollTo(0, 0);
     }
-    window.scrollTo(0, 0);
-    fetchArticolo();
+    fetchData();
   }, [id]);
 
+  // Ancoraggio e Evidenziazione automatica del commento proveniente dalla Bacheca del profilo
   useEffect(() => {
-    const handleScroll = () => {
-      if (!articleBodyRef.current) return;
-      const { top, height } = articleBodyRef.current.getBoundingClientRect();
-      const windowHeight = window.innerHeight;
-      const scrollPosition = -top + 56;
-      const totalScrollable = height - windowHeight + 150; 
-      
-      let progress = (scrollPosition / totalScrollable) * 100;
-      if (progress < 0) progress = 0;
-      if (progress > 100) progress = 100;
-      setScrollProgress(progress);
-    };
-
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, [loading]);
+    if (commentsList.length > 0 && window.location.hash) {
+      const commentId = window.location.hash; // Es: #commento-5
+      const element = document.querySelector(commentId);
+      if (element) {
+        setTimeout(() => {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          element.classList.add('bg-[#ff2020]/20', 'transition-colors', 'duration-1000');
+          setTimeout(() => {
+            element.classList.remove('bg-[#ff2020]/20');
+          }, 2000);
+        }, 300);
+      }
+    }
+  }, [commentsList]);
 
   const handlePostComment = async () => {
+    if (!newCommentText.trim()) return;
+    
     if (!user) {
       openModal();
       return;
     }
-    if (!newComment.trim()) return;
+
+    setIsSubmitting(true);
 
     const { data: userData, error: userError } = await supabase
       .from('utenti')
@@ -124,29 +118,29 @@ export default function PaginaArticolo() {
 
     if (userError || !userData) {
       alert("ATTENZIONE: Il tuo account non è sincronizzato. Effettua il Logout e registrati nuovamente.");
+      setIsSubmitting(false);
       return;
     }
 
-    const { error } = await supabase
-      .from('commenti')
-      .insert([
-        {
-          testo: newComment,
-          id_articolo: parseInt(id),
-          id_utente: userData.id,
-          id_commento_padre: replyingTo, 
-          data: new Date().toISOString()
-        }
-      ]);
+    const { error } = await supabase.from('commenti').insert([
+      {
+        testo: newCommentText,
+        id_articolo: parseInt(id),
+        id_utente: userData.id,
+        id_commento_padre: replyingTo, 
+        data: new Date().toISOString()
+      }
+    ]);
 
     if (!error) {
-      setNewComment('');
+      setNewCommentText('');
       setReplyingTo(null);
-      fetchComments();
+      fetchComments(); 
       setArticle(prev => ({ ...prev, commenti: (prev.commenti || 0) + 1 }));
     } else {
       alert("Errore del Database: " + error.message);
     }
+    setIsSubmitting(false);
   };
 
   const handleVote = async (commentId, voteValue) => {
@@ -187,48 +181,52 @@ export default function PaginaArticolo() {
       return;
     }
     setReplyingTo(commentId);
-    setNewComment(`@${username} `);
+    setNewCommentText(`@${username} `);
     commentInputRef.current?.focus();
     window.scrollTo({ top: commentInputRef.current.offsetTop - 100, behavior: 'smooth' });
   };
 
-  if (loading) return <div className="text-white p-10 text-center font-bold">Caricamento articolo...</div>;
-  if (!article) return <div className="text-white p-10 text-center font-bold">Articolo non trovato.</div>;
-
-  const isReview = article.id_categoria === 2;
-  const rawDate = new Date(article.creato_il);
-  const dateFormatted = `${rawDate.getDate()} ${rawDate.toLocaleDateString('it-IT', { month: 'long' })} ${rawDate.getFullYear()}`;
-
   const formatCommentDate = (dateString) => {
+    if (!dateString) return '';
     const commentDate = new Date(dateString);
-    const oreFa = Math.floor((new Date() - commentDate) / (1000 * 60 * 60));
-    if (oreFa === 0) {
-      const minFa = Math.floor((new Date() - commentDate) / (1000 * 60));
-      return minFa === 0 ? "Adesso" : `${minFa} minuti fa`;
-    }
-    if (oreFa < 24) return `${oreFa} or${oreFa === 1 ? 'a' : 'e'} fa`;
+    const now = new Date();
+    const diffTime = Math.abs(now - commentDate);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+    if (diffDays === 1) return 'Oggi';
+    if (diffDays === 2) return 'Ieri';
+    if (diffDays <= 30) return `${diffDays - 1} giorni fa`;
     return commentDate.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
   };
 
-  const parentComments = comments.filter(c => !c.id_commento_padre);
-  const getReplies = (parentId) => comments.filter(c => c.id_commento_padre === parentId);
+  if (loading) return <div className="text-white text-center p-10 font-bold">Caricamento articolo...</div>;
+  if (!article) return <div className="text-white text-center p-10 font-bold">Articolo non trovato.</div>;
+
+  const dateStr = new Date(article.creato_il).toLocaleDateString('it-IT');
+  const catName = article.categorie?.nome || 'News';
+  const sommario = article.sommario || "Abbiamo completato l'attesissima esclusiva e siamo finalmente pronti a darvi il nostro giudizio sul viaggio più brutale e controverso.";
+
+  const parentComments = commentsList.filter(c => !c.id_commento_padre);
+  const getReplies = (parentId) => commentsList.filter(c => c.id_commento_padre === parentId);
 
   const renderComment = (comment, isReply = false) => {
     const username = comment.utenti?.username || 'Utente';
     const avatar = `https://api.dicebear.com/7.x/bottts/svg?seed=${username}`;
     
     return (
-      <div key={comment.id} className={`flex flex-col py-6 border-b border-gray-800/60 ${isReply ? 'ml-12 border-l border-gray-800/60 pl-6 border-b-0 py-4' : ''}`}>
-        
+      <div 
+        id={`commento-${comment.id}`} 
+        key={comment.id} 
+        className={`flex flex-col py-6 border-b border-gray-800/60 transition-colors rounded-md px-2 ${isReply ? 'ml-12 border-l-2 border-[#1f1f1f] pl-6 border-b-0 py-4 mt-2 bg-[#141414]' : ''}`}
+      >
         <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-4">
             <div className="relative">
-              <img src={avatar} alt={username} className="w-11 h-11 rounded-full bg-gray-800 p-1 border border-gray-700" />
-              <div className="absolute -top-1 -right-1 bg-[#00bfff] text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center shadow-md">
+              <img src={avatar} alt={username} className="w-12 h-12 rounded-full bg-gray-800 p-1 border-[2px] border-[#00bfff]" />
+              <div className="absolute -top-1 -right-1 bg-[#00bfff] text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center shadow-md border-[2px] border-[#111111]">
                 1
               </div>
             </div>
-            <span className="text-white font-bold text-[14px]">{username}</span>
+            <span className="text-white font-bold text-[15px]">{username}</span>
           </div>
           
           <div className="flex items-center gap-4 text-gray-500 text-[12px] font-semibold">
@@ -236,17 +234,17 @@ export default function PaginaArticolo() {
             <div className="flex items-center gap-3">
               <button onClick={() => handleVote(comment.id, 1)} className="flex items-center gap-1 hover:text-green-500 transition-colors">
                 <ThumbUp /> 
-                <span className="text-green-500 bg-[#162a16] px-1.5 rounded-full text-[10px] font-black">{comment.upvotes || 0}</span>
+                {comment.upvotes > 0 && <span className="text-green-500 bg-[#162a16] px-1.5 rounded-full text-[10px] font-black">{comment.upvotes}</span>}
               </button>
               <button onClick={() => handleVote(comment.id, -1)} className="flex items-center gap-1 hover:text-red-500 transition-colors">
                 <ThumbDown />
-                <span className="text-red-500 bg-[#2a1616] px-1.5 rounded-full text-[10px] font-black">{comment.downvotes > 0 ? comment.downvotes : ''}</span>
+                {comment.downvotes > 0 && <span className="text-red-500 bg-[#2a1616] px-1.5 rounded-full text-[10px] font-black">{comment.downvotes}</span>}
               </button>
             </div>
           </div>
         </div>
 
-        <p className="text-gray-300 text-[14px] leading-relaxed mb-4 whitespace-pre-wrap">
+        <p className="text-gray-300 text-[14px] leading-relaxed mb-4 whitespace-pre-wrap ml-[64px]">
           {comment.testo.split('\n').map((line, lineIndex) => (
             <React.Fragment key={lineIndex}>
               {line.split(' ').map((word, i) => word.startsWith('@') ? <span key={i} className="text-[#00bfff] font-bold">{word} </span> : `${word} `)}
@@ -255,155 +253,199 @@ export default function PaginaArticolo() {
           ))}
         </p>
 
-        <div className="flex items-center justify-between text-[11px] font-bold">
+        <div className="flex items-center justify-between text-[11px] font-bold ml-[64px]">
           <div className="flex items-center gap-4 text-[#ff2020]">
             <span 
               onClick={() => handleReplyClick(isReply ? comment.id_commento_padre : comment.id, username)} 
-              className="cursor-pointer hover:text-white transition-colors"
+              className="cursor-pointer hover:underline transition-colors font-medium text-[12px]"
             >
               Rispondi
             </span>
-            <span className="cursor-pointer hover:text-white transition-colors">Permalink</span>
+            <span className="cursor-pointer hover:underline transition-colors font-medium text-[12px]">Permalink</span>
           </div>
-          <span className="text-gray-500 cursor-pointer hover:text-gray-300 transition-colors">Segnala</span>
+          <span className="text-gray-500 cursor-pointer hover:text-gray-300 transition-colors font-medium text-[12px]">Segnala</span>
         </div>
       </div>
     );
   };
 
   return (
-    <>
-      <div className="sticky top-14 left-0 w-full h-[3px] bg-gray-800 z-40">
-        <div className="h-full bg-[#ff2020] transition-all duration-150 ease-out" style={{ width: `${scrollProgress}%` }}></div>
-      </div>
-
-      <main className="max-w-[1000px] mx-auto p-4 mt-8 pb-20">
+    <div className="bg-[#111111] min-h-screen pb-20 font-sans">
+      <div className="max-w-[1200px] mx-auto px-4 pt-8 flex flex-col lg:flex-row gap-8">
         
-        <div className="mb-8 border-b border-gray-800 pb-6">
-          <span className="text-[#ff2020] text-[12px] font-black uppercase tracking-widest">{article.categorie?.nome || 'ARTICOLO'}</span>
-          <h1 className="text-3xl md:text-5xl font-black mt-3 mb-4 leading-tight text-white">{article.titolo}</h1>
-          <div className="flex items-center gap-4 text-gray-400 text-xs font-bold uppercase tracking-wide">
-            <span>Di <span className="text-white">Redazione</span></span>
-            <span>{dateFormatted}</span>
-            <span className="flex items-center gap-1 text-[#ff2020] font-black">💬 {comments.length}</span>
-          </div>
-        </div>
-
-        {article.url_immagine && (
-          <img src={getImg(article.url_immagine)} alt="Copertina" className="w-full h-auto max-h-[500px] object-cover mb-10 rounded-sm" />
-        )}
-
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-10 relative">
+        {/* ================= COLONNA SINISTRA (ARTICOLO 70%) ================= */}
+        <div className="lg:w-[70%] flex flex-col">
           
-          <div className="md:col-span-8 flex flex-col" ref={articleBodyRef}>
-            <div 
-              className="text-gray-300 text-[17px] leading-relaxed font-serif 
-                         [&>p]:mb-5 [&>h2]:text-3xl [&>h2]:font-bold [&>h2]:text-white [&>h2]:mb-4 [&>h2]:mt-8
-                         [&>h3]:text-2xl [&>h3]:font-bold [&>h3]:text-white [&>h3]:mb-3 [&>h3]:mt-6
-                         [&>ul]:list-disc [&>ul]:ml-6 [&>ul]:mb-5 [&>ul>li]:mb-1
-                         [&>ol]:list-decimal [&>ol]:ml-6 [&>ol]:mb-5 [&>ol>li]:mb-1
-                         [&>a]:text-[#ff2020] [&>a]:underline [&>blockquote]:border-l-4 [&>blockquote]:border-[#ff2020] [&>blockquote]:pl-4 [&>blockquote]:italic"
-              dangerouslySetInnerHTML={{ __html: article.corpo }}
-            />
+          <div className="flex items-start justify-between gap-4">
+            <h1 className="text-3xl md:text-5xl font-black text-white leading-tight tracking-tight">
+              {article.titolo}
+            </h1>
+            {catName === 'Recensione' && (
+              <div className="mt-2 w-10 h-10 bg-[#ff2020] rounded-full flex items-center justify-center text-white text-[10px] font-black flex-shrink-0 shadow-lg">HOT</div>
+            )}
+          </div>
 
-            {isReview && (
-              <div className="mt-12 bg-[#1a1a1a] rounded-sm overflow-hidden border border-[#2a2a2a] shadow-2xl">
-                <div className="bg-[#7e0f12] py-3 text-center">
-                  <h2 className="text-white text-xl font-black uppercase tracking-widest">Conclusioni</h2>
+          <p className="text-xl md:text-2xl text-gray-300 mt-6 leading-snug">{sommario}</p>
+
+          <div className="text-[11px] font-black uppercase tracking-widest mt-6">
+            <span className="text-[#ff2020]">{catName}</span>
+            <span className="text-gray-400 normal-case font-semibold"> di Pierpaolo Greco — {dateStr}</span>
+          </div>
+
+          <div className="flex justify-between items-center border-y border-gray-800 py-4 my-6">
+            <button className="border border-[#ff2020] text-[#ff2020] hover:bg-[#ff2020] hover:text-white transition-colors px-3 py-1.5 text-[10px] font-black uppercase tracking-widest flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z" /></svg>
+              Leggi Dopo
+            </button>
+          </div>
+
+          <div className="w-full aspect-video bg-[#1a1a1a] mb-6 border border-gray-800">
+            {article.url_immagine && <img src={getImg(article.url_immagine)} alt={article.titolo} className="w-full h-full object-cover" />}
+          </div>
+
+          {game && (
+            <div className="bg-[#1a1a1a] border border-gray-800 p-5 rounded-sm shadow-xl mb-10">
+              <div className="flex justify-between items-center mb-5">
+                <div className="flex items-center gap-4">
+                  <img src={getImg(game.url_immagine)} alt={game.titolo} className="w-14 h-14 object-cover border-2 border-gray-700 shadow-md" />
+                  <h3 className="text-white font-black text-xl">{game.titolo}</h3>
                 </div>
-                <div className="grid grid-cols-3 border-b border-[#2a2a2a]">
-                  <div className="flex flex-col items-center justify-center p-6 border-r border-[#2a2a2a]">
-                    <span className="text-[#ff2020] text-[10px] font-black uppercase tracking-widest mb-1">Multiplayer.it</span>
-                    <span className="text-[#ff2020] text-5xl font-black">{article.voto ? parseFloat(article.voto).toFixed(1) : '-'}</span>
-                  </div>
-                  <div className="flex flex-col items-center justify-center p-6 border-r border-[#2a2a2a]">
-                    <span className="text-gray-400 text-[10px] font-black uppercase tracking-widest mb-2">Il tuo voto</span>
-                    <span className="text-white text-4xl font-black mb-3">{userVote}</span>
-                    <input type="range" min="0" max="10" step="0.1" value={userVote === '-' ? 5 : userVote} onChange={e => setUserVote(parseFloat(e.target.value).toFixed(1))} className="w-full accent-[#ff2020] h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer" />
-                  </div>
-                  <div className="flex flex-col items-center justify-center p-6">
-                    <span className="text-[#00bfff] text-[10px] font-black uppercase tracking-widest mb-1">Lettori ({comments.length})</span>
-                    <span className="text-[#00bfff] text-5xl font-black">7.5</span>
-                  </div>
+                <button className="border border-[#ff2020] text-[#ff2020] px-5 py-1.5 text-[10px] uppercase font-black tracking-widest rounded-full hover:bg-[#ff2020] hover:text-white transition-colors">SEGUI</button>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <Link to={`/gioco/${game.id}`} state={{ tab: 'recensioni' }} className="border border-gray-600 text-white text-xs font-bold text-center py-2 rounded-full hover:border-white transition-colors">Articoli</Link>
+                <Link to={`/gioco/${game.id}`} state={{ tab: 'notizie' }} className="border border-gray-600 text-white text-xs font-bold text-center py-2 rounded-full hover:border-white transition-colors">News</Link>
+                <Link to={`/gioco/${game.id}`} state={{ tab: 'video' }} className="border border-gray-600 text-white text-xs font-bold text-center py-2 rounded-full hover:border-white transition-colors">Video</Link>
+                <Link to={`/gioco/${game.id}`} state={{ tab: 'video', scrollTo: 'immagini' }} className="border border-gray-600 text-white text-xs font-bold text-center py-2 rounded-full hover:border-white transition-colors">Immagini</Link>
+              </div>
+            </div>
+          )}
+
+          <div className="prose prose-invert max-w-none text-gray-300 text-[17px] leading-relaxed custom-quill-content" dangerouslySetInnerHTML={{ __html: article.contenuto }} />
+
+          {/* ================= SEZIONE CONCLUSIONI ================= */}
+          {catName === 'Recensione' && (
+            <div className="mt-16 mb-12 w-full font-sans">
+              <div className="bg-[#8b0000] text-white text-center py-3 font-black text-2xl tracking-widest">CONCLUSIONI</div>
+              <div className="bg-[#a80f0f] text-white flex flex-wrap justify-between items-center text-center p-4 border-b-2 border-black/20 text-xs font-bold uppercase">
+                <div className="flex-1 border-r border-black/20 px-2"><div className="text-white/80 text-[10px] mb-1">VERSIONE TESTATA</div>{mockConclusion.versioneTestata}</div>
+                <div className="flex-[2] border-r border-black/20 px-2"><div className="text-white/80 text-[10px] mb-1">DIGITAL DELIVERY</div>{mockConclusion.digitalDelivery}</div>
+                <div className="flex-1 px-2"><div className="text-white/80 text-[10px] mb-1">PREZZO</div>{mockConclusion.prezzo}</div>
+              </div>
+              <div className="bg-[#1a1a1a] p-6 flex items-center justify-around border-b-[8px] border-[#5e0a0a]">
+                <div className="text-center">
+                  <h4 className="text-[#ff2020] text-[11px] font-black tracking-widest mb-2 uppercase">Multiplayer.it</h4>
+                  <div className="text-[#ff2020] text-6xl font-black leading-none">{parseFloat(article.voto_redazione || 7.0).toFixed(1)}</div>
                 </div>
-                <div className="bg-[#5c0a0c] p-6 text-white text-[14px] leading-relaxed font-semibold">{MOCK_REVIEW_DATA.testo}</div>
-                <div className="p-6 flex flex-col gap-6 bg-[#161616]">
-                  <div className="bg-[#1e1e1e] p-5 border-t-[3px] border-[#107c10]">
-                    <h3 className="text-[#107c10] text-lg font-black uppercase mb-3">Pro</h3>
-                    <ul className="flex flex-col gap-2">{MOCK_REVIEW_DATA.pro.map((item, i) => <li key={i} className="flex items-start gap-2 text-sm text-gray-200 font-semibold"><span className="text-[#107c10] text-[10px] mt-1">●</span> {item}</li>)}</ul>
+                <div className="text-center flex flex-col items-center w-1/3">
+                  <h4 className="text-gray-400 text-[11px] font-black tracking-widest mb-4 uppercase">Il Tuo Voto</h4>
+                  <div className="text-gray-400 text-3xl font-black mb-2">-</div>
+                  <div className="w-full h-1 bg-gray-600 rounded-full relative flex items-center mt-2"><div className="w-4 h-4 bg-[#ff4444] rounded-full absolute left-10 shadow-lg"></div></div>
+                </div>
+                <div className="text-center">
+                  <h4 className="text-[#00bfff] text-[11px] font-black tracking-widest mb-2 uppercase">Lettori</h4>
+                  <div className="text-[#00bfff] text-6xl font-black leading-none">{mockConclusion.votoLettori}</div>
+                </div>
+              </div>
+              <div className="bg-[#5e0a0a] p-8">
+                <div className="flex flex-col gap-6">
+                  <div className="bg-[#1a1a1a] border-t-2 border-[#28a745] p-5 shadow-lg">
+                    <h4 className="text-[#28a745] font-black text-xl mb-4">PRO</h4>
+                    <ul className="space-y-3">{mockConclusion.pros.map((pro, idx) => <li key={idx} className="flex items-start text-white text-[15px] font-medium"><span className="text-[#28a745] text-lg mr-3 leading-none">●</span> {pro}</li>)}</ul>
                   </div>
-                  <div className="bg-[#1e1e1e] p-5 border-t-[3px] border-[#e50000]">
-                    <h3 className="text-[#e50000] text-lg font-black uppercase mb-3">Contro</h3>
-                    <ul className="flex flex-col gap-2">{MOCK_REVIEW_DATA.contro.map((item, i) => <li key={i} className="flex items-start gap-2 text-sm text-gray-200 font-semibold"><span className="text-[#e50000] text-[10px] mt-1">●</span> {item}</li>)}</ul>
+                  <div className="bg-[#1a1a1a] border-t-2 border-[#dc3545] p-5 shadow-lg">
+                    <h4 className="text-[#dc3545] font-black text-xl mb-4">CONTRO</h4>
+                    <ul className="space-y-3">{mockConclusion.cons.map((con, idx) => <li key={idx} className="flex items-start text-white text-[15px] font-medium"><span className="text-[#dc3545] text-lg mr-3 leading-none">●</span> {con}</li>)}</ul>
                   </div>
                 </div>
               </div>
-            )}
-          </div>
+            </div>
+          )}
 
-          <div className="md:col-span-4 relative">
-            {game && (
-              <div className="sticky top-24 bg-[#1a1a1a] border border-gray-800 p-4 rounded-sm flex flex-col items-center text-center">
-                <img src={getImg(game.url_immagine)} alt={game.titolo} className="w-full h-[180px] object-cover mb-4 rounded-sm shadow-md" />
-                <h3 className="text-xl font-black text-white mb-2">{game.titolo}</h3>
-                <div className="w-full border-t border-gray-800 my-3"></div>
-                <div className="flex flex-col gap-2 w-full text-left text-[12px]">
-                  <p className="font-bold text-gray-400">Piattaforme: <span className="text-white">{game.gioco_piattaforma?.map(p => p.piattaforme.nome).join(', ') || 'Varie'}</span></p>
-                  <p className="font-bold text-gray-400">Genere: <span className="text-[#ff2020] uppercase">{game.giochi_generi?.map(g => g.generi.nome).join(', ') || 'Non specificato'}</span></p>
+          {/* ================= SEZIONE COMMENTI AVANZATA ================= */}
+          <div className="mt-16 w-full mb-10 font-sans" id="sezione-commenti">
+            
+            <div className="flex items-center justify-between border-b border-gray-800 pb-2 mb-6">
+              <h3 className="text-white font-black text-lg uppercase tracking-tight">
+                <span className="text-[#ff2020]">{commentsList.length}</span> Commenti
+              </h3>
+              <span className="text-[#ff2020] text-xs font-black uppercase tracking-widest cursor-pointer hover:text-white transition-colors">Regolamento</span>
+            </div>
+
+            {/* Inserimento Nuovo Commento / Risposta */}
+            <div className="bg-[#2a2a2a] p-1 rounded-sm mb-8 flex items-center border border-transparent focus-within:border-[#ff2020] transition-colors relative shadow-lg">
+              <textarea 
+                ref={commentInputRef}
+                placeholder="Lascia un commento... (Premi Invio per inviare)" 
+                className="w-full bg-transparent text-gray-200 p-3 outline-none text-[15px] font-medium placeholder-gray-500 resize-none h-14"
+                value={newCommentText}
+                onChange={(e) => setNewCommentText(e.target.value)}
+                onClick={() => { if (!user) openModal(); }}
+                onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handlePostComment())}
+                disabled={isSubmitting}
+              />
+              
+              {replyingTo && (
+                <div onClick={() => { setReplyingTo(null); setNewCommentText(''); }} className="absolute -top-7 left-0 text-[11px] font-bold text-[#ff2020] hover:text-white cursor-pointer bg-[#1a1a1a] px-2 py-1 rounded-sm border border-[#ff2020]/30 transition-colors">
+                  ✕ Annulla risposta
                 </div>
-                {isReview && article.voto && (
-                  <div className="mt-5 w-full bg-[#ff2020] text-white py-3 flex flex-col items-center rounded-sm">
-                    <span className="text-[10px] font-black uppercase tracking-widest opacity-90">Voto Redazione</span>
-                    <span className="text-4xl font-black">{parseFloat(article.voto).toFixed(1)}</span>
-                  </div>
-                )}
+              )}
+
+              {newCommentText.trim() && user && (
+                <button 
+                  onClick={handlePostComment} 
+                  disabled={isSubmitting}
+                  className="text-[#ff2020] font-black uppercase text-xs px-6 hover:text-white transition-colors h-full disabled:opacity-50"
+                >
+                  INVIA
+                </button>
+              )}
+            </div>
+
+            {/* Paginazione */}
+            <div className="flex items-center justify-between mb-8 border-b border-gray-800/50 pb-4">
+              <div className="flex items-center gap-2 text-white font-bold text-xs">
+                <button className="w-6 h-6 rounded-full border border-gray-600 hover:border-[#ff2020] transition-colors">1</button>
               </div>
-            )}
-          </div>
-          
-        </div>
+              <button className="bg-[#ff2020] text-white text-[11px] font-black uppercase tracking-widest px-3 py-1.5 rounded-sm flex items-center gap-2">
+                DATA <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              </button>
+            </div>
 
-        {/* SEZIONE COMMENTI REALI */}
-        <div className="mt-16 pt-8 border-t border-gray-800 w-full max-w-[800px]">
-          
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-white font-black text-lg uppercase tracking-wider">
-              <span className="text-[#ff2020]">{comments.length}</span> {comments.length === 1 ? 'COMMENTO' : 'COMMENTI'}
-            </h3>
-            <span className="text-[#ff2020] text-xs font-black uppercase tracking-widest cursor-pointer hover:text-white transition-colors">Regolamento</span>
-          </div>
+            {/* Rendering della lista annidata di commenti */}
+            <div className="flex flex-col">
+              {parentComments.length > 0 ? (
+                parentComments.map(parentComment => (
+                  <React.Fragment key={parentComment.id}>
+                    {renderComment(parentComment, false)}
+                    {getReplies(parentComment.id).map(reply => renderComment(reply, true))}
+                  </React.Fragment>
+                ))
+              ) : (
+                <p className="text-gray-500 text-center font-bold">Nessun commento. Sii il primo a rompere il ghiaccio!</p>
+              )}
+            </div>
 
-          <div className="bg-[#2a2a2a] p-1 rounded-sm mb-12 flex items-center border border-transparent focus-within:border-[#ff2020] transition-colors relative">
-            <textarea 
-              ref={commentInputRef}
-              placeholder="Lascia un commento..." 
-              className="w-full bg-transparent text-gray-200 p-2.5 outline-none text-sm placeholder-gray-500 resize-none h-12"
-              value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-              onClick={() => { if (!user) openModal(); }}
-            />
-            {replyingTo && (
-              <span onClick={() => { setReplyingTo(null); setNewComment(''); }} className="absolute -top-6 left-0 text-xs text-gray-400 hover:text-white cursor-pointer">
-                ✕ Annulla risposta
-              </span>
-            )}
-            {newComment.trim() && user && (
-              <button onClick={handlePostComment} className="text-[#ff2020] font-black uppercase text-xs px-4 hover:text-white transition-colors">INVIA</button>
-            )}
-          </div>
-
-          <div className="flex flex-col">
-            {parentComments.map(parentComment => (
-              <React.Fragment key={parentComment.id}>
-                {renderComment(parentComment, false)}
-                {/* Stampiamo i commenti figli (risposte) subito sotto al padre */}
-                {getReplies(parentComment.id).map(reply => renderComment(reply, true))}
-              </React.Fragment>
-            ))}
           </div>
 
         </div>
-      </main>
-    </>
+
+        {/* ================= COLONNA DESTRA (SIDEBAR 30%) ================= */}
+        <div className="lg:w-[30%] flex flex-col gap-10">
+          <div>
+            <h4 className="text-[#ff2020] text-[11px] font-black uppercase tracking-widest border-b border-gray-800 pb-2 mb-4">Ti potrebbe interessare</h4>
+            <div className="flex flex-col gap-4">
+              {sidebarArticles.slice(0, 3).map(sideArt => (
+                <Link key={sideArt.id} to={`/articolo/${sideArt.id}`} className="flex gap-4 group cursor-pointer">
+                  <div className="w-24 h-16 flex-shrink-0 border border-gray-800 overflow-hidden relative"><img src={getImg(sideArt.url_immagine)} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" /></div>
+                  <h5 className="text-white font-bold text-[13px] leading-snug group-hover:text-[#ff2020] transition-colors line-clamp-3">{sideArt.titolo}</h5>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
   );
 }
