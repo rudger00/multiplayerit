@@ -4,7 +4,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 // Importa i nuovi componenti
 import { AuthProvider } from './context/AuthContext';
 import LoginModal from './components/LoginModal';
-
+import PaginaGioco from './pages/PaginaGioco';
 import Navbar from './components/Navbar';
 import Home from './pages/Home';
 import PaginaRicerca from './pages/PaginaRicerca';
@@ -30,6 +30,7 @@ export default function App() {
             <Route path="/giochi" element={<PaginaGiochi />} />
             <Route path="/editor" element={<PaginaEditor />} />
             <Route path="/:slug" element={<PaginaPiattaforma />} />
+            <Route path="/gioco/:id" element={<PaginaGioco />} />
           </Routes>
         </div>
       </Router>

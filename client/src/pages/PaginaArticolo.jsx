@@ -30,7 +30,9 @@ export default function PaginaArticolo() {
   const [article, setArticle] = useState(null);
   const [game, setGame] = useState(null);
   const [comments, setComments] = useState([]);
+  
   const [newComment, setNewComment] = useState('');
+  const [replyingTo, setReplyingTo] = useState(null); 
   
   const [loading, setLoading] = useState(true);
   const [scrollProgress, setScrollProgress] = useState(0);
@@ -47,12 +49,17 @@ export default function PaginaArticolo() {
         testo,
         data,
         id_commento_padre,
-        utenti ( username, id_ruolo )
+        upvotes,
+        downvotes,
+        utenti!id_utente ( username, id_ruolo ) 
       `)
       .eq('id_articolo', parseInt(id))
-      .order('data', { ascending: false });
+      .order('data', { ascending: true });
 
-    if (!error && data) {
+    if (error) {
+      console.error("Errore fetch commenti:", error);
+      alert("Errore nel caricare i commenti dal database: " + error.message);
+    } else if (data) {
       setComments(data);
     }
   };
@@ -109,7 +116,6 @@ export default function PaginaArticolo() {
     }
     if (!newComment.trim()) return;
 
-    // Cerca l'utente nella tabella pubblica associata all'Auth ID
     const { data: userData, error: userError } = await supabase
       .from('utenti')
       .select('id')
@@ -117,7 +123,7 @@ export default function PaginaArticolo() {
       .single();
 
     if (userError || !userData) {
-      alert("ATTENZIONE: Il tuo account di test non è sincronizzato nella tabella 'utenti'. Effettua il Logout e registrati nuovamente con un nuovo account.");
+      alert("ATTENZIONE: Il tuo account non è sincronizzato. Effettua il Logout e registrati nuovamente.");
       return;
     }
 
@@ -128,19 +134,62 @@ export default function PaginaArticolo() {
           testo: newComment,
           id_articolo: parseInt(id),
           id_utente: userData.id,
+          id_commento_padre: replyingTo, 
           data: new Date().toISOString()
         }
       ]);
 
     if (!error) {
       setNewComment('');
+      setReplyingTo(null);
       fetchComments();
-      
-      // Aggiorna anche il contatore locale dell'articolo per coerenza immediata
       setArticle(prev => ({ ...prev, commenti: (prev.commenti || 0) + 1 }));
     } else {
       alert("Errore del Database: " + error.message);
     }
+  };
+
+  const handleVote = async (commentId, voteValue) => {
+    if (!user) {
+      openModal();
+      return;
+    }
+    
+    const { data: userData } = await supabase.from('utenti').select('id').eq('id_auth', user.id).single();
+    if (!userData) return;
+
+    const { error: upsertError } = await supabase
+      .from('commenti_voti')
+      .upsert({ id_commento: commentId, id_utente: userData.id, voto: voteValue }, { onConflict: 'id_commento, id_utente' });
+
+    if (upsertError) {
+      alert("Errore registrazione voto: " + upsertError.message);
+      return;
+    }
+
+    const { data: allVotes } = await supabase.from('commenti_voti').select('voto').eq('id_commento', commentId);
+    
+    let newUpvotes = 0;
+    let newDownvotes = 0;
+    
+    allVotes?.forEach(v => {
+      if (v.voto === 1) newUpvotes++;
+      if (v.voto === -1) newDownvotes++;
+    });
+
+    await supabase.from('commenti').update({ upvotes: newUpvotes, downvotes: newDownvotes }).eq('id', commentId);
+    fetchComments();
+  };
+
+  const handleReplyClick = (commentId, username) => {
+    if (!user) {
+      openModal();
+      return;
+    }
+    setReplyingTo(commentId);
+    setNewComment(`@${username} `);
+    commentInputRef.current?.focus();
+    window.scrollTo({ top: commentInputRef.current.offsetTop - 100, behavior: 'smooth' });
   };
 
   if (loading) return <div className="text-white p-10 text-center font-bold">Caricamento articolo...</div>;
@@ -159,6 +208,67 @@ export default function PaginaArticolo() {
     }
     if (oreFa < 24) return `${oreFa} or${oreFa === 1 ? 'a' : 'e'} fa`;
     return commentDate.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  };
+
+  const parentComments = comments.filter(c => !c.id_commento_padre);
+  const getReplies = (parentId) => comments.filter(c => c.id_commento_padre === parentId);
+
+  const renderComment = (comment, isReply = false) => {
+    const username = comment.utenti?.username || 'Utente';
+    const avatar = `https://api.dicebear.com/7.x/bottts/svg?seed=${username}`;
+    
+    return (
+      <div key={comment.id} className={`flex flex-col py-6 border-b border-gray-800/60 ${isReply ? 'ml-12 border-l border-gray-800/60 pl-6 border-b-0 py-4' : ''}`}>
+        
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <img src={avatar} alt={username} className="w-11 h-11 rounded-full bg-gray-800 p-1 border border-gray-700" />
+              <div className="absolute -top-1 -right-1 bg-[#00bfff] text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center shadow-md">
+                1
+              </div>
+            </div>
+            <span className="text-white font-bold text-[14px]">{username}</span>
+          </div>
+          
+          <div className="flex items-center gap-4 text-gray-500 text-[12px] font-semibold">
+            <span>{formatCommentDate(comment.data)}</span>
+            <div className="flex items-center gap-3">
+              <button onClick={() => handleVote(comment.id, 1)} className="flex items-center gap-1 hover:text-green-500 transition-colors">
+                <ThumbUp /> 
+                <span className="text-green-500 bg-[#162a16] px-1.5 rounded-full text-[10px] font-black">{comment.upvotes || 0}</span>
+              </button>
+              <button onClick={() => handleVote(comment.id, -1)} className="flex items-center gap-1 hover:text-red-500 transition-colors">
+                <ThumbDown />
+                <span className="text-red-500 bg-[#2a1616] px-1.5 rounded-full text-[10px] font-black">{comment.downvotes > 0 ? comment.downvotes : ''}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <p className="text-gray-300 text-[14px] leading-relaxed mb-4 whitespace-pre-wrap">
+          {comment.testo.split('\n').map((line, lineIndex) => (
+            <React.Fragment key={lineIndex}>
+              {line.split(' ').map((word, i) => word.startsWith('@') ? <span key={i} className="text-[#00bfff] font-bold">{word} </span> : `${word} `)}
+              <br />
+            </React.Fragment>
+          ))}
+        </p>
+
+        <div className="flex items-center justify-between text-[11px] font-bold">
+          <div className="flex items-center gap-4 text-[#ff2020]">
+            <span 
+              onClick={() => handleReplyClick(isReply ? comment.id_commento_padre : comment.id, username)} 
+              className="cursor-pointer hover:text-white transition-colors"
+            >
+              Rispondi
+            </span>
+            <span className="cursor-pointer hover:text-white transition-colors">Permalink</span>
+          </div>
+          <span className="text-gray-500 cursor-pointer hover:text-gray-300 transition-colors">Segnala</span>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -263,78 +373,33 @@ export default function PaginaArticolo() {
             <span className="text-[#ff2020] text-xs font-black uppercase tracking-widest cursor-pointer hover:text-white transition-colors">Regolamento</span>
           </div>
 
-          <div className="bg-[#2a2a2a] p-1 rounded-sm mb-12 flex items-center border border-transparent focus-within:border-[#ff2020] transition-colors">
-            <input 
+          <div className="bg-[#2a2a2a] p-1 rounded-sm mb-12 flex items-center border border-transparent focus-within:border-[#ff2020] transition-colors relative">
+            <textarea 
               ref={commentInputRef}
-              type="text" 
               placeholder="Lascia un commento..." 
-              className="w-full bg-transparent text-gray-200 p-2.5 outline-none text-sm placeholder-gray-500"
+              className="w-full bg-transparent text-gray-200 p-2.5 outline-none text-sm placeholder-gray-500 resize-none h-12"
               value={newComment}
               onChange={(e) => setNewComment(e.target.value)}
               onClick={() => { if (!user) openModal(); }}
-              onKeyDown={(e) => e.key === 'Enter' && handlePostComment()}
             />
+            {replyingTo && (
+              <span onClick={() => { setReplyingTo(null); setNewComment(''); }} className="absolute -top-6 left-0 text-xs text-gray-400 hover:text-white cursor-pointer">
+                ✕ Annulla risposta
+              </span>
+            )}
             {newComment.trim() && user && (
               <button onClick={handlePostComment} className="text-[#ff2020] font-black uppercase text-xs px-4 hover:text-white transition-colors">INVIA</button>
             )}
           </div>
 
           <div className="flex flex-col">
-            {comments.map((comment, index) => {
-              const username = comment.utenti?.username || 'Utente';
-              const avatar = `https://api.dicebear.com/7.x/bottts/svg?seed=${username}`;
-              
-              return (
-                <div key={comment.id} className={`flex flex-col py-6 ${index !== comments.length - 1 ? 'border-b border-gray-800/60' : ''}`}>
-                  
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-3">
-                      <div className="relative">
-                        <img src={avatar} alt={username} className="w-11 h-11 rounded-full bg-gray-800 p-1 border border-gray-700" />
-                        <div className="absolute -top-1 -right-1 bg-[#00bfff] text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center shadow-md">
-                          1
-                        </div>
-                      </div>
-                      <span className="text-white font-bold text-[14px]">{username}</span>
-                    </div>
-                    
-                    <div className="flex items-center gap-4 text-gray-500 text-[12px] font-semibold">
-                      <span>{formatCommentDate(comment.data)}</span>
-                      <div className="flex items-center gap-3">
-                        <button className="flex items-center gap-1 hover:text-green-500 transition-colors"><ThumbUp /> <span className="text-green-500 bg-[#162a16] px-1.5 rounded-full text-[10px] font-black">0</span></button>
-                        <button className="flex items-center gap-1 hover:text-red-500 transition-colors"><ThumbDown /></button>
-                      </div>
-                    </div>
-                  </div>
-
-                  <p className="text-gray-300 text-[14px] leading-relaxed mb-4 whitespace-pre-wrap">
-                    {comment.testo.split(' ').map((word, i) => word.startsWith('@') ? <span key={i} className="text-[#00bfff] font-bold">{word} </span> : `${word} `)}
-                  </p>
-
-                  <div className="flex items-center justify-between text-[11px] font-bold">
-                    <div className="flex items-center gap-4 text-[#ff2020]">
-                      <span 
-                        onClick={() => {
-                          if (!user) {
-                            openModal();
-                          } else {
-                            setNewComment(`@${username} `);
-                            commentInputRef.current?.focus();
-                            window.scrollTo({ top: commentInputRef.current.offsetTop - 100, behavior: 'smooth' });
-                          }
-                        }} 
-                        className="cursor-pointer hover:text-white transition-colors"
-                      >
-                        Rispondi
-                      </span>
-                      <span className="cursor-pointer hover:text-white transition-colors">Permalink</span>
-                    </div>
-                    <span className="text-gray-500 cursor-pointer hover:text-gray-300 transition-colors">Segnala</span>
-                  </div>
-                  
-                </div>
-              );
-            })}
+            {parentComments.map(parentComment => (
+              <React.Fragment key={parentComment.id}>
+                {renderComment(parentComment, false)}
+                {/* Stampiamo i commenti figli (risposte) subito sotto al padre */}
+                {getReplies(parentComment.id).map(reply => renderComment(reply, true))}
+              </React.Fragment>
+            ))}
           </div>
 
         </div>
