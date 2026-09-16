@@ -24,7 +24,6 @@ const ChevronCircle = ({ isOpen }) => (
 );
 
 export default function PaginaGiochi() {
-  // Impostiamo la data odierna reale del sistema (2026)
   const [currentDate, setCurrentDate] = useState(new Date()); 
   const [viewMode, setViewMode] = useState('uscita'); 
   const [isPiattaformeOpen, setIsPiattaformeOpen] = useState(true);
@@ -42,10 +41,13 @@ export default function PaginaGiochi() {
       
       const y = currentDate.getFullYear();
       const m = currentDate.getMonth();
-      const firstDay = new Date(Date.UTC(y, m, 1)).toISOString().split('T')[0];
-      const lastDay = new Date(Date.UTC(y, m + 1, 0)).toISOString().split('T')[0];
+      
+      // Creazione sicura delle stringhe data per Supabase (YYYY-MM-DD)
+      const firstDay = `${y}-${String(m + 1).padStart(2, '0')}-01`;
+      const lastDayObj = new Date(y, m + 1, 0);
+      const lastDay = `${y}-${String(m + 1).padStart(2, '0')}-${String(lastDayObj.getDate()).padStart(2, '0')}`;
 
-      // Proviamo prima a filtrare per il mese selezionato
+      // Costruzione dinamica della Query
       let query = supabase
         .from('giochi')
         .select(`
@@ -58,46 +60,30 @@ export default function PaginaGiochi() {
           giochi_generi ( generi ( nome ) ),
           gioco_piattaforma ( piattaforme ( nome ) ),
           articoli ( id, id_categoria )
-        `)
-        .gte('data_uscita', firstDay)
-        .lte('data_uscita', lastDay)
-        .order('data_uscita', { ascending: true });
+        `);
 
-      let { data, error } = await query;
-
-      // FALLBACK DI SICUREZZA: Se nel mese specifico non trova nulla, 
-      // carica TUTTI i giochi presenti nel DB così la pagina non rimane mai vuota!
-      if ((!data || data.length === 0) && viewMode === 'uscita') {
-        const { data: fallbackData } = await supabase
-          .from('giochi')
-          .select(`
-            id,
-            titolo,
-            url_immagine,
-            data_uscita,
-            voto_redazione,
-            voto_lettori,
-            giochi_generi ( generi ( nome ) ),
-            gioco_piattaforma ( piattaforme ( nome ) ),
-            articoli ( id, id_categoria )
-          `)
-          .order('data_uscita', { ascending: true });
-        
-        if (fallbackData) data = fallbackData;
+      if (viewMode === 'uscita') {
+        // Seleziona solo i giochi del mese specificato
+        query = query.gte('data_uscita', firstDay).lte('data_uscita', lastDay).order('data_uscita', { ascending: true });
+      } else {
+        // Se è 'migliori', non filtra per mese ma prende i giochi con voto più alto in assoluto
+        query = query.not('voto_redazione', 'is', null).order('voto_redazione', { ascending: false }).limit(50);
       }
 
-      if (data) {
+      const { data, error } = await query;
+
+      if (!error && data) {
         const mappedGames = data.map(g => {
           const genresArr = g.giochi_generi?.map(item => item.generi?.nome).filter(Boolean) || [];
           const platformsArr = g.gioco_piattaforma?.map(item => item.piattaforme?.nome).filter(Boolean) || [];
           
           let dataFormattata = 'Da definire';
-          let weekLabel = 'ALTRI GIOCHI';
+          let weekLabel = 'TUTTI I GIOCHI';
 
           if (g.data_uscita) {
             const dateObj = new Date(g.data_uscita);
-            const meseNome = dateObj.toLocaleDateString('it-IT', { month: 'long' });
-            dataFormattata = `${dateObj.getDate()} ${meseNome.charAt(0).toUpperCase() + meseNome.slice(1)} ${dateObj.getFullYear()}`;
+            const meseNomeSingolo = dateObj.toLocaleDateString('it-IT', { month: 'long' });
+            dataFormattata = `${dateObj.getDate()} ${meseNomeSingolo.charAt(0).toUpperCase() + meseNomeSingolo.slice(1)} ${dateObj.getFullYear()}`;
 
             const day = dateObj.getDay();
             const diff = dateObj.getDate() - day + (day === 0 ? -6 : 1);
@@ -123,12 +109,14 @@ export default function PaginaGiochi() {
           };
         });
         setGames(mappedGames);
+      } else {
+        setGames([]);
       }
       setLoading(false);
     }
 
     fetchGiochi();
-  }, [currentDate, viewMode]);
+  }, [currentDate, viewMode]); // Ri-esegue quando cambia la data o la modalità di visualizzazione
 
   const handlePrevMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
   const handleNextMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
@@ -140,7 +128,7 @@ export default function PaginaGiochi() {
 
   const meseNome = currentDate.toLocaleDateString('it-IT', { month: 'long' }).toUpperCase();
   const anno = currentDate.getFullYear();
-  const titoloPagina = viewMode === 'uscita' ? `GIOCHI IN USCITA A ${meseNome} ${anno}` : `I MIGLIORI GIOCHI DI ${meseNome} ${anno}`;
+  const titoloPagina = viewMode === 'uscita' ? `GIOCHI IN USCITA A ${meseNome} ${anno}` : `I MIGLIORI GIOCHI DI SEMPRE`;
 
   let displayedGames = [...games];
   
@@ -241,10 +229,13 @@ export default function PaginaGiochi() {
                 </div>
               ))
             ) : (
-              <p className="text-gray-400 py-10 font-bold">Nessun gioco trovato nel database.</p>
+              <p className="text-gray-400 py-10 font-bold">
+                Nessun gioco {viewMode === 'uscita' ? `in uscita a ${meseNome} ${anno}` : 'trovato per i filtri selezionati'}.
+              </p>
             )}
           </div>
 
+          {/* PULSANTI DI NAVIGAZIONE DEL MESE */}
           {viewMode === 'uscita' ? (
             <div className="flex justify-between mt-10 mb-8 border-t border-gray-800 pt-6">
               <button onClick={handlePrevMonth} className="border border-gray-600 hover:border-[#ff2020] hover:text-[#ff2020] text-gray-300 font-black text-[12px] uppercase px-6 py-3 rounded-full tracking-widest transition-colors">
@@ -272,7 +263,7 @@ export default function PaginaGiochi() {
               
               <div 
                 className={`cursor-pointer transition-colors ${viewMode === 'uscita' ? 'text-[#ff2020]' : 'text-gray-300 hover:text-white'}`}
-                onClick={() => { setViewMode('uscita'); setActiveGenere('tutte'); }}
+                onClick={() => { setViewMode('uscita'); setActiveGenere('tutte'); setActivePlatform('tutte'); }}
               >
                 In uscita
               </div>

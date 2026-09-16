@@ -164,8 +164,19 @@ export default function Navbar() {
               </div>
             )}
           </li>
-          <li className="h-full flex items-center px-3 hover:text-gray-300 cursor-pointer transition-colors uppercase">VIDEO</li>
-          <li className="relative h-full flex items-center"><Link to="/giochi" onClick={closeAll} className="px-3 hover:text-gray-300 transition-colors uppercase h-full flex items-center">GIOCHI</Link></li>
+          
+          {/* LINK AGGIORNATO ALLA PAGINA DEI VIDEO */}
+          <li className="relative h-full flex items-center">
+            <Link to="/video" onClick={closeAll} className="px-3 hover:text-gray-300 transition-colors uppercase h-full flex items-center">
+              VIDEO
+            </Link>
+          </li>
+          
+          <li className="relative h-full flex items-center">
+            <Link to="/giochi" onClick={closeAll} className="px-3 hover:text-gray-300 transition-colors uppercase h-full flex items-center">
+              GIOCHI
+            </Link>
+          </li>
         </ul>
       )}
 

@@ -14,6 +14,7 @@ import PaginaCategoria from './pages/PaginaCategoria';
 import PaginaGiochi from './pages/PaginaGiochi';
 import PaginaEditor from './pages/PaginaEditor';
 import PaginaProfilo from './pages/PaginaProfilo';
+import PaginaVideo from './pages/PaginaVideo';
 export default function App() {
   return (
     <AuthProvider>
@@ -33,6 +34,7 @@ export default function App() {
             <Route path="/gioco/:id" element={<PaginaGioco />} />
             <Route path="/live" element={<PaginaLive />} />
             <Route path="/profilo" element={<PaginaProfilo />} />
+            <Route path="/video" element={<PaginaVideo />} />
           </Routes>
         </div>
       </Router>
