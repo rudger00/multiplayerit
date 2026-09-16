@@ -7,7 +7,7 @@ import { useAuth } from '../context/AuthContext';
 export default function PaginaGioco() {
   const { id } = useParams();
   const location = useLocation();
-  const navigate = useNavigate(); // Aggiunto per pulire lo stato di React Router
+  const navigate = useNavigate(); 
   const { user, openModal } = useAuth();
   
   const [game, setGame] = useState(null);
@@ -18,7 +18,11 @@ export default function PaginaGioco() {
   const [showVoteDropdown, setShowVoteDropdown] = useState(false);
   const [myVote, setMyVote] = useState(5.0);
   const voteRef = useRef(null);
-  const hasScrolled = useRef(false); // Memorizza se lo scroll automatico è già stato fatto
+  const hasScrolled = useRef(false); 
+
+  // STATI PER IL PULSANTE SEGUI (GIOCHI)
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [loadingFollow, setLoadingFollow] = useState(false);
 
   const [youtubeVideos, setYoutubeVideos] = useState([]);
   const [mainVideo, setMainVideo] = useState(null);
@@ -35,11 +39,12 @@ export default function PaginaGioco() {
     async function fetchData() {
       setLoading(true);
       
+      // QUERY GIOCO: aggiunti i campi voto_lettori, numero_voti e piattaforme!
       const { data: gameData } = await supabase
         .from('giochi')
         .select(`*, giochi_generi(generi(nome)), gioco_piattaforma(piattaforme(nome))`)
         .eq('id', parseInt(id))
-        .single();
+        .maybeSingle();
 
       if (gameData) setGame(gameData);
 
@@ -52,16 +57,27 @@ export default function PaginaGioco() {
       if (articlesData) setArticles(articlesData);
 
       if (user) {
-        const { data: userData } = await supabase.from('utenti').select('id').eq('id_auth', user.id).single();
+        const { data: userData } = await supabase.from('utenti').select('id').eq('id_auth', user.id).maybeSingle();
         if (userData) {
+          // Carica eventuale voto esistente
           const { data: voteData } = await supabase
             .from('voti_giochi')
             .select('voto')
             .eq('id_gioco', parseInt(id))
             .eq('id_utente', userData.id)
-            .single();
+            .maybeSingle();
             
           if (voteData) setMyVote(voteData.voto);
+
+          // Controllo se l'utente segue già il gioco
+          const { data: followData } = await supabase
+            .from('segui_giochi')
+            .select('*')
+            .eq('id_utente', userData.id)
+            .eq('id_gioco', parseInt(id))
+            .maybeSingle();
+
+          if (followData) setIsFollowing(true);
         }
       }
 
@@ -73,6 +89,27 @@ export default function PaginaGioco() {
     }
     fetchData();
   }, [id, user, location.state]);
+
+  // Logica Segui/Non Seguire
+  const toggleFollow = async () => {
+    if (!user) {
+      openModal();
+      return;
+    }
+    setLoadingFollow(true);
+    const { data: userData } = await supabase.from('utenti').select('id').eq('id_auth', user.id).maybeSingle();
+    
+    if (userData && game) {
+      if (isFollowing) {
+        await supabase.from('segui_giochi').delete().eq('id_utente', userData.id).eq('id_gioco', game.id);
+        setIsFollowing(false);
+      } else {
+        await supabase.from('segui_giochi').insert([{ id_utente: userData.id, id_gioco: game.id }]);
+        setIsFollowing(true);
+      }
+    }
+    setLoadingFollow(false);
+  };
 
   useEffect(() => {
     async function fetchYouTubeVideos() {
@@ -126,14 +163,13 @@ export default function PaginaGioco() {
     fetchGameImages();
   }, [activeTab, game, gameImages.length]);
 
-  // AUTOSCROLL CORRETTO: Avviene solo 1 volta grazie a hasScrolled.current
   useEffect(() => {
     if (location.state?.scrollTo === 'immagini' && activeTab === 'video' && gameImages.length > 0 && !hasScrolled.current) {
       setTimeout(() => {
         const sezioneImmagini = document.getElementById('sezione-immagini');
         if (sezioneImmagini) {
           sezioneImmagini.scrollIntoView({ behavior: 'smooth' });
-          hasScrolled.current = true; // Segna che lo scroll è stato completato
+          hasScrolled.current = true; 
         }
       }, 500); 
     }
@@ -158,26 +194,47 @@ export default function PaginaGioco() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isLightboxOpen]);
 
+  // LOGICA AGGIORNATA: SALVATAGGIO VOTO E RICALCOLO DELLA MEDIA "LETTORI" DALLA PAGINA GIOCO
   const handleSaveVote = async () => {
-    if (!user) {
+    if (!user || !game) {
       openModal();
       return;
     }
-    const { data: userData } = await supabase.from('utenti').select('id').eq('id_auth', user.id).single();
+    
+    const { data: userData } = await supabase.from('utenti').select('id').eq('id_auth', user.id).maybeSingle();
+    
     if (userData) {
+      const votoDaSalvare = parseFloat(myVote);
+      
       const { error } = await supabase
         .from('voti_giochi')
         .upsert(
-          { id_gioco: parseInt(id), id_utente: userData.id, voto: parseFloat(myVote) }, 
+          { id_gioco: parseInt(id), id_utente: userData.id, voto: votoDaSalvare }, 
           { onConflict: 'id_gioco, id_utente' }
         );
       
       if (!error) {
-        setGame(prev => ({ 
-          ...prev, 
-          voto_lettori: ((parseFloat(prev.voto_lettori || 0) * (prev.numero_voti || 0) + parseFloat(myVote)) / ((prev.numero_voti || 0) + 1)).toFixed(1),
-          numero_voti: (prev.numero_voti || 0) + 1 
-        }));
+        const { data: tuttiVoti } = await supabase
+          .from('voti_giochi')
+          .select('voto')
+          .eq('id_gioco', parseInt(id));
+          
+        if (tuttiVoti && tuttiVoti.length > 0) {
+          const somma = tuttiVoti.reduce((acc, curr) => acc + curr.voto, 0);
+          const mediaReale = (somma / tuttiVoti.length).toFixed(1);
+          const numeroVotiReale = tuttiVoti.length;
+          
+          await supabase
+            .from('giochi')
+            .update({ voto_lettori: mediaReale, numero_voti: numeroVotiReale })
+            .eq('id', parseInt(id));
+            
+          setGame(prev => ({
+            ...prev,
+            voto_lettori: mediaReale,
+            numero_voti: numeroVotiReale
+          }));
+        }
       }
     }
     setShowVoteDropdown(false);
@@ -202,7 +259,12 @@ export default function PaginaGioco() {
 
   const coverUrl = getImg(game.url_immagine);
   const releaseDate = game.data_uscita ? new Date(game.data_uscita).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Da definire';
-  const platforms = game.gioco_piattaforma?.map(p => p.piattaforme.nome).join(' - ') || 'Non specificate';
+  
+  // ESTRAZIONE DINAMICA DELLE PIATTAFORME
+  const platforms = game.gioco_piattaforma && game.gioco_piattaforma.length > 0 
+    ? game.gioco_piattaforma.map(p => p.piattaforme.nome).join(' - ') 
+    : 'ND';
+    
   const genres = game.giochi_generi?.map(g => g.generi.nome).join(', ') || 'Non specificato';
   
   const sviluppatore = game.sviluppatore || 'Non specificato';
@@ -222,8 +284,6 @@ export default function PaginaGioco() {
     <button 
       onClick={() => {
         setActiveTab(id);
-        // Quando l'utente clicca un tab, PULIAMO la memoria del router 
-        // così se torna su "Video", non scrolla più in automatico!
         if (location.state) {
           navigate(location.pathname, { replace: true, state: {} });
         }
@@ -302,7 +362,18 @@ export default function PaginaGioco() {
           
           <div className="bg-[#1a1a1a]/90 backdrop-blur-sm p-6 flex-grow rounded-sm shadow-xl flex flex-col justify-center border border-gray-800">
             <div className="flex items-center gap-4 mb-4">
-              <button className="text-[#ff2020] border border-[#ff2020] rounded-full font-black uppercase text-xs px-6 py-2 hover:bg-[#ff2020] hover:text-white transition-colors">Segui</button>
+              
+              <button 
+                onClick={toggleFollow}
+                disabled={loadingFollow}
+                className={`border rounded-full font-black uppercase text-xs px-6 py-2 transition-colors ${
+                  isFollowing 
+                    ? 'bg-[#ff2020] border-[#ff2020] text-white hover:bg-red-700' 
+                    : 'text-[#ff2020] border-[#ff2020] hover:bg-[#ff2020] hover:text-white'
+                }`}
+              >
+                {isFollowing ? 'NON SEGUIRE' : 'SEGUI'}
+              </button>
               
               <div>
                 {activeTab === 'gioco' && <h1 className="text-3xl font-black text-white">{game.titolo}</h1>}
@@ -315,7 +386,9 @@ export default function PaginaGioco() {
             {activeTab === 'gioco' && (
               <div className="flex items-center gap-6 mb-4 relative" ref={voteRef}>
                 <div className="flex items-center gap-3 relative">
-                  <div className="w-10 h-10 bg-[#ff2020] rounded-full flex items-center justify-center text-white font-black text-sm shadow-md">10</div>
+                  <div className="w-10 h-10 bg-[#ff2020] rounded-full flex items-center justify-center text-white font-black text-sm shadow-md">
+                    {game.voto_redazione ? parseFloat(game.voto_redazione).toFixed(1) : '-'}
+                  </div>
                   
                   <div 
                     onClick={() => { if(!user) openModal(); else setShowVoteDropdown(!showVoteDropdown); }}

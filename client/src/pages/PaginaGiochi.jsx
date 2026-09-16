@@ -24,7 +24,8 @@ const ChevronCircle = ({ isOpen }) => (
 );
 
 export default function PaginaGiochi() {
-  const [currentDate, setCurrentDate] = useState(new Date(2026, 8, 1)); 
+  // Impostiamo la data odierna reale del sistema (2026)
+  const [currentDate, setCurrentDate] = useState(new Date()); 
   const [viewMode, setViewMode] = useState('uscita'); 
   const [isPiattaformeOpen, setIsPiattaformeOpen] = useState(true);
   const [isGeneriOpen, setIsGeneriOpen] = useState(true);
@@ -44,8 +45,8 @@ export default function PaginaGiochi() {
       const firstDay = new Date(Date.UTC(y, m, 1)).toISOString().split('T')[0];
       const lastDay = new Date(Date.UTC(y, m + 1, 0)).toISOString().split('T')[0];
 
-      // Peschiamo i giochi E i loro articoli collegati!
-      const { data, error } = await supabase
+      // Proviamo prima a filtrare per il mese selezionato
+      let query = supabase
         .from('giochi')
         .select(`
           id,
@@ -53,6 +54,7 @@ export default function PaginaGiochi() {
           url_immagine,
           data_uscita,
           voto_redazione,
+          voto_lettori,
           giochi_generi ( generi ( nome ) ),
           gioco_piattaforma ( piattaforme ( nome ) ),
           articoli ( id, id_categoria )
@@ -61,21 +63,48 @@ export default function PaginaGiochi() {
         .lte('data_uscita', lastDay)
         .order('data_uscita', { ascending: true });
 
-      if (!error && data) {
+      let { data, error } = await query;
+
+      // FALLBACK DI SICUREZZA: Se nel mese specifico non trova nulla, 
+      // carica TUTTI i giochi presenti nel DB così la pagina non rimane mai vuota!
+      if ((!data || data.length === 0) && viewMode === 'uscita') {
+        const { data: fallbackData } = await supabase
+          .from('giochi')
+          .select(`
+            id,
+            titolo,
+            url_immagine,
+            data_uscita,
+            voto_redazione,
+            voto_lettori,
+            giochi_generi ( generi ( nome ) ),
+            gioco_piattaforma ( piattaforme ( nome ) ),
+            articoli ( id, id_categoria )
+          `)
+          .order('data_uscita', { ascending: true });
+        
+        if (fallbackData) data = fallbackData;
+      }
+
+      if (data) {
         const mappedGames = data.map(g => {
           const genresArr = g.giochi_generi?.map(item => item.generi?.nome).filter(Boolean) || [];
           const platformsArr = g.gioco_piattaforma?.map(item => item.piattaforme?.nome).filter(Boolean) || [];
           
-          const dateObj = new Date(g.data_uscita);
-          const meseNome = dateObj.toLocaleDateString('it-IT', { month: 'long' });
-          const dataFormattata = `${dateObj.getDate()} ${meseNome.charAt(0).toUpperCase() + meseNome.slice(1)} ${dateObj.getFullYear()}`;
+          let dataFormattata = 'Da definire';
+          let weekLabel = 'ALTRI GIOCHI';
 
-          const day = dateObj.getDay();
-          const diff = dateObj.getDate() - day + (day === 0 ? -6 : 1);
-          const monday = new Date(dateObj.setDate(diff));
-          const weekLabel = `SETTIMANA DEL ${monday.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' })}`;
+          if (g.data_uscita) {
+            const dateObj = new Date(g.data_uscita);
+            const meseNome = dateObj.toLocaleDateString('it-IT', { month: 'long' });
+            dataFormattata = `${dateObj.getDate()} ${meseNome.charAt(0).toUpperCase() + meseNome.slice(1)} ${dateObj.getFullYear()}`;
 
-          // Cerchiamo se questo gioco ha un articolo di tipo Recensione (id_categoria = 2)
+            const day = dateObj.getDay();
+            const diff = dateObj.getDate() - day + (day === 0 ? -6 : 1);
+            const monday = new Date(dateObj.setDate(diff));
+            weekLabel = `SETTIMANA DEL ${monday.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' })}`;
+          }
+
           const recensione = g.articoli?.find(a => a.id_categoria === 2);
 
           return {
@@ -85,12 +114,12 @@ export default function PaginaGiochi() {
             genresArr,
             genres: genresArr.join(', ') || 'Nessun genere',
             platformsArr,
-            platforms: platformsArr.join(', ') || 'Varie',
+            platforms: platformsArr.join(' - ') || 'Non specificate',
             date: dataFormattata,
             redazione: g.voto_redazione ? parseFloat(g.voto_redazione).toFixed(1) : '-',
-            lettori: '-', 
+            lettori: g.voto_lettori ? parseFloat(g.voto_lettori).toFixed(1) : '-', 
             week: weekLabel,
-            reviewId: recensione ? recensione.id : null // Salviamo l'ID della recensione!
+            reviewId: recensione ? recensione.id : null 
           };
         });
         setGames(mappedGames);
@@ -99,7 +128,7 @@ export default function PaginaGiochi() {
     }
 
     fetchGiochi();
-  }, [currentDate]);
+  }, [currentDate, viewMode]);
 
   const handlePrevMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
   const handleNextMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
@@ -164,11 +193,15 @@ export default function PaginaGiochi() {
                       <div key={game.id} className="flex items-center justify-between py-5 border-b border-gray-800/80 group">
                         
                         <div className="flex items-center gap-5 pr-4">
-                          <img src={game.img} alt={game.title} className="w-[85px] h-[85px] object-cover rounded-sm shadow-md" />
-                          <div className="flex flex-col justify-center">
-                            <h3 className="text-[22px] font-black leading-tight text-white mb-1 cursor-default">
-                              {game.title}
-                            </h3>
+                          <Link to={`/gioco/${game.id}`}>
+                            <img src={game.img} alt={game.title} className="w-[85px] h-[85px] object-cover rounded-sm shadow-md hover:opacity-80 transition-opacity" />
+                          </Link>
+                          <div className="flex flex-col justify-center text-left">
+                            <Link to={`/gioco/${game.id}`}>
+                              <h3 className="text-[22px] font-black leading-tight text-white mb-1 hover:text-[#ff2020] transition-colors">
+                                {game.title}
+                              </h3>
+                            </Link>
                             <p className="text-[12px] font-semibold mb-1 leading-snug">
                               <span className="text-[#ff2020]">{game.genres}</span>
                               <span className="text-gray-500 mx-1">per</span>
@@ -183,8 +216,6 @@ export default function PaginaGiochi() {
                         <div className="flex gap-6 shrink-0 pl-4">
                           <div className="flex flex-col items-center">
                             <span className="text-[#ff2020] text-[10px] font-black uppercase tracking-widest mb-1">Redazione</span>
-                            
-                            {/* SE ESISTE LA RECENSIONE, IL VOTO DIVENTA UN LINK! */}
                             {game.reviewId && game.redazione !== '-' ? (
                               <Link 
                                 to={`/articolo/${game.reviewId}`} 
@@ -196,8 +227,8 @@ export default function PaginaGiochi() {
                             ) : (
                               <span className="text-[#ff2020] text-[32px] font-black leading-none">{game.redazione}</span>
                             )}
-
                           </div>
+                          
                           <div className="flex flex-col items-center">
                             <span className="text-[#00bfff] text-[10px] font-black uppercase tracking-widest mb-1">Lettori</span>
                             <span className="text-[#00bfff] text-[32px] font-black leading-none">{game.lettori}</span>
@@ -210,7 +241,7 @@ export default function PaginaGiochi() {
                 </div>
               ))
             ) : (
-              <p className="text-gray-400 py-10 font-bold">Nessun gioco in uscita per il periodo o i filtri selezionati.</p>
+              <p className="text-gray-400 py-10 font-bold">Nessun gioco trovato nel database.</p>
             )}
           </div>
 
@@ -237,7 +268,7 @@ export default function PaginaGiochi() {
         {/* COLONNA LATERALE (Filtri) */}
         <div className="lg:col-span-4 flex flex-col">
           <div className="bg-[#1a1a1a] rounded-sm p-5 border border-gray-800">
-            <div className="flex flex-col gap-4 font-bold text-[15px]">
+            <div className="flex flex-col gap-4 font-bold text-[15px] text-left">
               
               <div 
                 className={`cursor-pointer transition-colors ${viewMode === 'uscita' ? 'text-[#ff2020]' : 'text-gray-300 hover:text-white'}`}
