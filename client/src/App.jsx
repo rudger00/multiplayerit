@@ -15,6 +15,8 @@ import PaginaGiochi from './pages/PaginaGiochi';
 import PaginaEditor from './pages/PaginaEditor';
 import PaginaProfilo from './pages/PaginaProfilo';
 import PaginaVideo from './pages/PaginaVideo';
+import PaginaUtente from './pages/PaginaUtente';
+import PaginaScrivi from './pages/PaginaScrivi';
 export default function App() {
   return (
     <AuthProvider>
@@ -27,6 +29,7 @@ export default function App() {
             <Route path="/" element={<Home />} />
             <Route path="/ricerca" element={<PaginaRicerca />} />
             <Route path="/articolo/:id" element={<PaginaArticolo />} />
+            <Route path="/scrivi" element={<PaginaScrivi />} />
             <Route path="/articoli/:categoria" element={<PaginaCategoria />} />
             <Route path="/giochi" element={<PaginaGiochi />} />
             <Route path="/editor" element={<PaginaEditor />} />
@@ -35,6 +38,7 @@ export default function App() {
             <Route path="/live" element={<PaginaLive />} />
             <Route path="/profilo" element={<PaginaProfilo />} />
             <Route path="/video" element={<PaginaVideo />} />
+            <Route path="/utente/:username" element={<PaginaUtente />} />
           </Routes>
         </div>
       </Router>

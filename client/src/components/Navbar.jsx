@@ -33,6 +33,7 @@ export default function Navbar() {
   
   const [notifiche, setNotifiche] = useState([]);
   const [userDataId, setUserDataId] = useState(null);
+  const [userRole, setUserRole] = useState(null); 
 
   useEffect(() => {
     async function fetchDropdownData() {
@@ -46,11 +47,13 @@ export default function Navbar() {
   }, []);
 
   useEffect(() => {
-    async function fetchNotifiche() {
+    async function fetchUserData() {
       if (!user) return;
-      const { data: userData } = await supabase.from('utenti').select('id').eq('id_auth', user.id).maybeSingle();
+      const { data: userData } = await supabase.from('utenti').select('id, id_ruolo').eq('id_auth', user.id).maybeSingle();
       if (userData) {
         setUserDataId(userData.id);
+        setUserRole(userData.id_ruolo);
+        
         const { data: notifData } = await supabase
           .from('notifiche')
           .select('*')
@@ -60,7 +63,7 @@ export default function Navbar() {
         if (notifData) setNotifiche(notifData);
       }
     }
-    fetchNotifiche();
+    fetchUserData();
   }, [user, isProfileOpen]);
 
   const markAllAsRead = async (e) => {
@@ -96,8 +99,13 @@ export default function Navbar() {
   const handleToggleLock = (name) => setLockedDropdown(lockedDropdown === name ? null : name);
 
   const closeAll = () => { setHoveredDropdown(null); setLockedDropdown(null); setIsSearchOpen(false); setIsProfileOpen(false); };
+  
+  // LA RIGA MANCANTE RIPRISTINATA:
   const isOpen = (name) => hoveredDropdown === name || lockedDropdown === name;
+  
   const usernameVisualizzato = user?.user_metadata?.username || user?.email?.split('@')[0] || "Utente";
+
+  const isReporter = userRole === 1 || userRole === 2;
 
   return (
     <nav className="sticky top-0 w-full flex items-center justify-between bg-[#1a1a1a] h-14 border-b border-gray-800 z-[100] shadow-sm">
@@ -127,6 +135,15 @@ export default function Navbar() {
         </div>
       ) : (
         <ul className="hidden lg:flex items-center h-full space-x-1 text-[11px] font-bold tracking-widest text-white ml-auto">
+          
+          {isReporter && (
+            <li className="relative h-full flex items-center">
+              <Link to="/scrivi" onClick={closeAll} className="px-3 text-[#fffff] hover:text-white transition-colors uppercase h-full flex items-center gap-1.5 border-b-2 border-transparent hover:border-[#ff2020]">
+                <span></span> SCRIVI
+              </Link>
+            </li>
+          )}
+
           <li className="relative h-full flex items-center" onMouseEnter={() => handleMouseEnter('piattaforme')} onMouseLeave={handleMouseLeave}>
             <button onClick={() => handleToggleLock('piattaforme')} className={`h-full px-3 flex items-center gap-1.5 transition-colors uppercase ${isOpen('piattaforme') ? 'bg-white/10' : 'hover:text-gray-300'}`}><span className="font-black text-sm text-[#ff2020] leading-none mb-0.5">☰</span> {navPlatformLabel}</button>
             {isOpen('piattaforme') && (
@@ -165,7 +182,6 @@ export default function Navbar() {
             )}
           </li>
           
-          {/* LINK AGGIORNATO ALLA PAGINA DEI VIDEO */}
           <li className="relative h-full flex items-center">
             <Link to="/video" onClick={closeAll} className="px-3 hover:text-gray-300 transition-colors uppercase h-full flex items-center">
               VIDEO

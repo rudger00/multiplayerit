@@ -25,9 +25,9 @@ export default function PaginaArticolo() {
   const [isFollowing, setIsFollowing] = useState(false);
   const [loadingFollow, setLoadingFollow] = useState(false);
   
+  // VOTO UTENTE PER IL GIOCO
   const [myGameVote, setMyGameVote] = useState(null);
 
-  // NUOVI STATI PER GLI ARTICOLI SALVATI
   const [isSaved, setIsSaved] = useState(false);
   const [loadingSave, setLoadingSave] = useState(false);
 
@@ -51,17 +51,23 @@ export default function PaginaArticolo() {
       const { data: articleData } = await supabase.from('articoli').select(`*, categorie(nome)`).eq('id', parseInt(id)).maybeSingle();
 
       if (articleData) {
+        
+        if (articleData.id_autore) {
+           const { data: authorData } = await supabase.from('utenti').select('username').eq('id', articleData.id_autore).maybeSingle();
+           articleData.autore_username = authorData?.username || 'Redazione';
+        } else {
+           articleData.autore_username = 'Redazione';
+        }
+
         setArticle(articleData);
         
         if (user) {
           const { data: userData } = await supabase.from('utenti').select('id').eq('id_auth', user.id).maybeSingle();
           if (userData) {
-            // CONTROLLA SE L'ARTICOLO È GIÀ SALVATO
             const { data: savedData } = await supabase.from('articoli_salvati')
               .select('*').eq('id_utente', userData.id).eq('id_articolo', articleData.id).maybeSingle();
             if (savedData) setIsSaved(true);
 
-            // LOGICA GIOCO (se presente nell'articolo)
             if (articleData.id_gioco) {
               const { data: gameData } = await supabase.from('giochi').select('*').eq('id', articleData.id_gioco).maybeSingle();
               if (gameData) {
@@ -78,7 +84,6 @@ export default function PaginaArticolo() {
             }
           }
         } else if (articleData.id_gioco) {
-           // Fallback se l'utente non è loggato ma il gioco esiste
            const { data: gameData } = await supabase.from('giochi').select('*').eq('id', articleData.id_gioco).maybeSingle();
            if (gameData) setGame(gameData);
         }
@@ -107,7 +112,6 @@ export default function PaginaArticolo() {
     }
   }, [commentsList]);
 
-  // Funzione per salvare l'articolo in "Articoli Salvati"
   const toggleSaveArticle = async () => {
     if (!user) { openModal(); return; }
     setLoadingSave(true);
@@ -142,15 +146,17 @@ export default function PaginaArticolo() {
     setLoadingFollow(false);
   };
 
+  // SALVATAGGIO VOTO UTENTE
   const handleSaveGameVote = async () => {
-    if (!user || !game) return;
+    if (!user || !game || myGameVote === null) return;
     const { data: userData } = await supabase.from('utenti').select('id').eq('id_auth', user.id).maybeSingle();
     
     if (userData) {
-      const votoDaSalvare = parseFloat(myGameVote || 5.0);
+      const votoDaSalvare = parseFloat(myGameVote);
       const { error } = await supabase.from('voti_giochi').upsert({ id_gioco: game.id, id_utente: userData.id, voto: votoDaSalvare }, { onConflict: 'id_gioco, id_utente' });
       
       if (!error) {
+        // Ricalcola la media globale
         const { data: tuttiVoti } = await supabase.from('voti_giochi').select('voto').eq('id_gioco', game.id);
         if (tuttiVoti && tuttiVoti.length > 0) {
           const somma = tuttiVoti.reduce((acc, curr) => acc + curr.voto, 0);
@@ -227,20 +233,29 @@ export default function PaginaArticolo() {
     return new Date(dateString).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
   };
 
+  const getYouTubeEmbedUrl = (url) => {
+    if (!url) return null;
+    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+    const match = url.match(regExp);
+    return (match && match[2].length === 11) ? `https://www.youtube.com/embed/${match[2]}` : null;
+  };
+
   if (loading) return <div className="text-white text-center p-10 font-bold">Caricamento articolo...</div>;
   if (!article) return <div className="text-white text-center p-10 font-bold">Articolo non trovato.</div>;
 
   const dateStr = new Date(article.creato_il).toLocaleDateString('it-IT');
   const catName = article.categorie?.nome || 'News';
   const isReview = catName.toLowerCase().includes('recension') || article.id_categoria === 2;
-  const sommario = article.sommario || "Abbiamo completato l'attesissima esclusiva e siamo finalmente pronti a darvi il nostro giudizio sul viaggio più brutale e controverso.";
+  const sommario = article.sommario || "";
+  const authorName = article.autore_username || 'Redazione';
 
   const parentComments = commentsList.filter(c => !c.id_commento_padre);
   const getReplies = (parentId) => commentsList.filter(c => c.id_commento_padre === parentId);
 
   const prosList = article.pro ? article.pro.split('\n').filter(p => p.trim() !== '') : ["Nessun pro specificato"];
   const consList = article.contro ? article.contro.split('\n').filter(p => p.trim() !== '') : ["Nessun contro specificato"];
-  const votoLettoriFinale = game?.voto_lettori || article.voto_lettori ? parseFloat(game?.voto_lettori || article.voto_lettori).toFixed(1) : '-';
+  
+  const embedUrl = getYouTubeEmbedUrl(article.url_video);
 
   const renderComment = (comment, isReply = false) => {
     const username = comment.utenti?.username || 'Utente';
@@ -249,11 +264,13 @@ export default function PaginaArticolo() {
       <div id={`commento-${comment.id}`} key={comment.id} className={`flex flex-col py-6 border-b border-gray-800/60 transition-colors rounded-md px-2 ${isReply ? 'ml-12 border-l-2 border-[#1f1f1f] pl-6 border-b-0 py-4 mt-2 bg-[#141414]' : ''}`}>
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-4">
-            <div className="relative">
-              <img src={avatar} alt={username} className="w-12 h-12 rounded-full bg-gray-800 p-1 border-[2px] border-[#00bfff]" />
+            <Link to={`/utente/${username}`} className="relative group">
+              <img src={avatar} alt={username} className="w-12 h-12 rounded-full bg-gray-800 p-1 border-[2px] border-[#00bfff] group-hover:border-[#ff2020] transition-colors" />
               <div className="absolute -top-1 -right-1 bg-[#00bfff] text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center shadow-md border-[2px] border-[#111111]">1</div>
-            </div>
-            <span className="text-white font-bold text-[15px]">{username}</span>
+            </Link>
+            <Link to={`/utente/${username}`} className="text-white font-bold text-[15px] hover:text-[#ff2020] transition-colors">
+              {username}
+            </Link>
           </div>
           <div className="flex items-center gap-4 text-gray-500 text-[12px] font-semibold">
             <span>{formatCommentDate(comment.data)}</span>
@@ -279,13 +296,23 @@ export default function PaginaArticolo() {
         <div className="lg:w-[70%] flex flex-col">
           <div className="flex items-start justify-between gap-4">
             <h1 className="text-3xl md:text-5xl font-black text-white leading-tight tracking-tight">{article.titolo}</h1>
-            {isReview && (<div className="mt-2 w-10 h-10 bg-[#ff2020] rounded-full flex items-center justify-center text-white text-[10px] font-black flex-shrink-0 shadow-lg">HOT</div>)}
+            
+            {commentsList.length > 10 ? (
+              <div className="mt-2 w-10 h-10 bg-[#ff2020] rounded-full flex items-center justify-center text-white text-[10px] font-black flex-shrink-0 shadow-lg" title="Articolo molto discusso">HOT</div>
+            ) : (
+              <div className="mt-2 w-10 h-10 bg-[#1a1a1a] border border-gray-700 rounded-full flex items-center justify-center text-[#ff2020] text-[14px] font-black flex-shrink-0 shadow-lg" title={`${commentsList.length} Commenti`}>
+                {commentsList.length}
+              </div>
+            )}
+            
           </div>
-          <p className="text-xl md:text-2xl text-gray-300 mt-6 leading-snug">{sommario}</p>
-          <div className="text-[11px] font-black uppercase tracking-widest mt-6"><span className="text-[#ff2020]">{catName}</span><span className="text-gray-400 normal-case font-semibold"> di Pierpaolo Greco — {dateStr}</span></div>
+          {sommario && <p className="text-xl md:text-2xl text-gray-300 mt-6 leading-snug">{sommario}</p>}
+          <div className="text-[11px] font-black uppercase tracking-widest mt-6">
+            <span className="text-[#ff2020]">{catName}</span>
+            <span className="text-gray-400 normal-case font-semibold"> di {authorName} — {dateStr}</span>
+          </div>
           
           <div className="flex justify-between items-center border-y border-gray-800 py-4 my-6">
-            {/* PULSANTE ARTICOLO SALVATO DINAMICO */}
             <button 
               onClick={toggleSaveArticle}
               disabled={loadingSave}
@@ -308,7 +335,6 @@ export default function PaginaArticolo() {
               )}
             </button>
             
-            {/* Icone Social */}
             <div className="flex items-center gap-1">
               <button className="w-8 h-8 bg-[#3b5998] flex items-center justify-center text-white hover:opacity-80"><svg className="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M9 8h-3v4h3v12h5v-12h3.642l.358-4h-4v-1.667c0-.955.192-1.333 1.115-1.333h2.885v-5h-3.808c-3.596 0-5.192 1.583-5.192 4.615v3.385z"/></svg></button>
               <button className="w-8 h-8 bg-black border border-gray-700 flex items-center justify-center text-white hover:bg-gray-800"><svg className="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></button>
@@ -318,6 +344,19 @@ export default function PaginaArticolo() {
           </div>
           
           <div className="w-full aspect-video bg-[#1a1a1a] mb-6 border border-gray-800">{article.url_immagine && <img src={getImg(article.url_immagine)} alt={article.titolo} className="w-full h-full object-cover" />}</div>
+
+          {embedUrl && (
+            <div className="w-full aspect-video bg-black relative mb-8 shadow-xl rounded-sm overflow-hidden border-2 border-gray-800">
+              <iframe 
+                className="w-full h-full" 
+                src={embedUrl} 
+                title="Trailer" 
+                frameBorder="0" 
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                allowFullScreen
+              ></iframe>
+            </div>
+          )}
 
           {game && (
             <div className="bg-[#1a1a1a] border border-gray-800 p-5 rounded-sm shadow-xl mb-10">
@@ -338,84 +377,95 @@ export default function PaginaArticolo() {
                   {isFollowing ? 'NON SEGUIRE' : 'SEGUI'}
                 </button>
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <Link to={`/gioco/${game.id}`} state={{ tab: 'recensioni' }} className="border border-gray-600 text-white text-xs font-bold text-center py-2 rounded-full hover:border-white transition-colors">Articoli</Link>
-                <Link to={`/gioco/${game.id}`} state={{ tab: 'notizie' }} className="border border-gray-600 text-white text-xs font-bold text-center py-2 rounded-full hover:border-white transition-colors">News</Link>
-                <Link to={`/gioco/${game.id}`} state={{ tab: 'video' }} className="border border-gray-600 text-white text-xs font-bold text-center py-2 rounded-full hover:border-white transition-colors">Video</Link>
-                <Link to={`/gioco/${game.id}`} state={{ tab: 'video', scrollTo: 'immagini' }} className="border border-gray-600 text-white text-xs font-bold text-center py-2 rounded-full hover:border-white transition-colors">Immagini</Link>
-              </div>
             </div>
           )}
 
-          <div className="prose prose-invert max-w-none text-gray-300 text-[17px] leading-relaxed custom-quill-content" dangerouslySetInnerHTML={{ __html: article.contenuto }} />
+          <div className="prose prose-invert max-w-none text-gray-300 text-[17px] leading-relaxed break-words [&_img]:block [&_img]:mx-auto [&_img]:my-8 [&_img]:max-w-full [&_img]:rounded-md [&_img]:shadow-xl [&_iframe]:w-full [&_iframe]:aspect-video [&_iframe]:my-8" dangerouslySetInnerHTML={{ __html: article.corpo }} />
 
+          {/* ======================= NUOVA GRAFICA: CONCLUSIONIS (VERTICALE) ======================= */}
           {isReview && (
-            <div className="mt-16 mb-12 w-full font-sans">
-              <div className="bg-[#8b0000] text-white text-center py-3 font-black text-2xl tracking-widest">CONCLUSIONI</div>
-              <div className="bg-[#a80f0f] text-white flex flex-wrap justify-between items-center text-center p-4 border-b-2 border-black/20 text-xs font-bold uppercase">
-                <div className="flex-1 border-r border-black/20 px-2"><div className="text-white/80 text-[10px] mb-1">VERSIONE TESTATA</div>{article.versione_testata || 'Non specificata'}</div>
-                <div className="flex-[2] border-r border-black/20 px-2"><div className="text-white/80 text-[10px] mb-1">DIGITAL DELIVERY</div>{article.digital_delivery || 'Non specificato'}</div>
-                <div className="flex-1 px-2"><div className="text-white/80 text-[10px] mb-1">PREZZO</div>{article.prezzo ? `${article.prezzo} €` : 'Non specificato'}</div>
+            <div className="mt-16 w-full font-sans bg-[#7a1212] shadow-2xl mb-12 flex flex-col">
+              
+              {/* Box Titolo & Versione */}
+              <div className="pt-8 pb-6 flex flex-col items-center">
+                <h3 className="text-white font-black text-2xl md:text-3xl uppercase tracking-widest drop-shadow-md">Conclusioni</h3>
+                {article.versione_testata && (
+                  <div className="mt-4 text-center flex flex-col items-center">
+                    <span className="text-gray-300 text-[10px] font-black tracking-widest uppercase mb-1">Versione Testata</span>
+                    <span className="text-white font-bold text-sm bg-black/20 px-4 py-1 rounded-full">{article.versione_testata}</span>
+                  </div>
+                )}
               </div>
-              <div className="bg-[#1a1a1a] p-6 flex items-center justify-around border-b-[8px] border-[#5e0a0a]">
-                
-                <div className="text-center">
-                  <h4 className="text-[#ff2020] text-[11px] font-black tracking-widest mb-2 uppercase">Multiplayer.it</h4>
-                  <div className="text-[#ff2020] text-6xl font-black leading-none">{article.voto_redazione ? parseFloat(article.voto_redazione).toFixed(1) : (article.voto ? parseFloat(article.voto).toFixed(1) : '-')}</div>
+
+              {/* Fascia Scura Centrale (Voti) */}
+              <div className="bg-[#1a1a1a] w-full py-8 px-4 flex flex-row justify-center items-center gap-6 md:gap-24 border-y-2 border-black/30">
+                {/* 1. Redazione */}
+                <div className="flex flex-col items-center">
+                  <span className="text-[#ff2020] text-[10px] md:text-[11px] font-black tracking-widest uppercase mb-1">Multiplayer.it</span>
+                  <span className="text-[#ff2020] text-5xl md:text-6xl font-black leading-none drop-shadow-sm">{article.voto ? parseFloat(article.voto).toFixed(1) : '-'}</span>
                 </div>
                 
-                <div className="text-center flex flex-col items-center w-1/3">
-                  <h4 className="text-gray-400 text-[11px] font-black tracking-widest mb-4 uppercase">Il Tuo Voto</h4>
-                  <div className="text-gray-400 text-3xl font-black mb-2">{myGameVote ? parseFloat(myGameVote).toFixed(1) : '-'}</div>
-                  
-                  <div className="w-full relative flex items-center mt-2 group h-4">
+                {/* 2. Il Tuo Voto (Slider Utente) */}
+                <div className="flex flex-col items-center relative min-w-[120px]">
+                  <span className="text-gray-400 text-[10px] md:text-[11px] font-black tracking-widest uppercase mb-1">Il Tuo Voto</span>
+                  <span className="text-white text-3xl md:text-4xl font-black leading-none mb-3">{myGameVote ? parseFloat(myGameVote).toFixed(1) : '-'}</span>
+                  {user ? (
                     <input 
                       type="range" 
-                      min="0" 
+                      min="1" 
                       max="10" 
                       step="0.1" 
-                      value={myGameVote || 5.0} 
-                      onChange={(e) => {
-                        if (!user) { openModal(); return; }
-                        setMyGameVote(e.target.value);
-                      }}
+                      value={myGameVote || 5} 
+                      onChange={(e) => setMyGameVote(e.target.value)} 
                       onMouseUp={handleSaveGameVote}
                       onTouchEnd={handleSaveGameVote}
-                      className="w-full absolute z-10 opacity-0 cursor-pointer h-full m-0"
+                      className="w-full accent-[#ff2020] h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer" 
                     />
-                    <div className="w-full h-1 bg-gray-600 rounded-full relative pointer-events-none overflow-hidden">
-                       <div className="h-full bg-[#ff4444] rounded-full transition-all duration-75" style={{ width: `${((myGameVote || 5.0) / 10) * 100}%` }}></div>
-                    </div>
-                    <div className="w-4 h-4 bg-[#ff4444] rounded-full absolute shadow-lg pointer-events-none group-hover:scale-125 transition-all duration-75" style={{ left: `${((myGameVote || 5.0) / 10) * 100}%`, transform: 'translateX(-50%)' }}></div>
-                  </div>
+                  ) : (
+                    <span className="text-gray-500 text-[10px] font-bold uppercase cursor-pointer hover:text-white transition-colors" onClick={openModal}>Accedi per votare</span>
+                  )}
                 </div>
 
-                <div className="text-center">
-                  <h4 className="text-[#00bfff] text-[11px] font-black tracking-widest mb-2 uppercase">Lettori</h4>
-                  <div className="text-[#00bfff] text-6xl font-black leading-none">{votoLettoriFinale}</div>
+                {/* 3. Lettori */}
+                <div className="flex flex-col items-center">
+                  <span className="text-[#00bfff] text-[10px] md:text-[11px] font-black tracking-widest uppercase mb-1">Lettori ({game?.numero_voti || 0})</span>
+                  <span className="text-[#00bfff] text-5xl md:text-6xl font-black leading-none drop-shadow-sm">{game?.voto_lettori ? parseFloat(game.voto_lettori).toFixed(1) : '-'}</span>
                 </div>
-
               </div>
 
-              <div className="bg-[#5e0a0a] p-8">
-                <div className="flex flex-col gap-6">
-                  <div className="bg-[#1a1a1a] border-t-2 border-[#28a745] p-5 shadow-lg">
-                    <h4 className="text-[#28a745] font-black text-xl mb-4">PRO</h4>
-                    <ul className="space-y-3">
+              {/* Testo e Pro/Contro */}
+              <div className="p-8 md:p-10 flex flex-col">
+                
+                {/* Testo Conclusioni */}
+                <p className="text-white text-[15px] font-medium leading-relaxed mb-10 text-justify">
+                  {article.testo_conclusioni || "Nessun commento conclusivo inserito."}
+                </p>
+
+                {/* Blocchi PRO e CONTRO */}
+                <div className="flex flex-col gap-6 w-full">
+                  <div className="bg-[#1a1a1a] p-6 md:p-8 border-t-[3px] border-[#28a745]">
+                    <h4 className="text-[#28a745] font-black text-xl mb-5 uppercase tracking-wide">PRO</h4>
+                    <ul className="space-y-4">
                       {prosList.map((pro, idx) => (
-                        <li key={idx} className="flex items-start text-white text-[15px] font-medium"><span className="text-[#28a745] text-lg mr-3 leading-none">●</span> {pro}</li>
+                        <li key={idx} className="flex items-start text-white text-[15px] font-medium leading-snug">
+                          <span className="text-[#28a745] text-[12px] mr-4 leading-none mt-1">●</span> {pro}
+                        </li>
                       ))}
                     </ul>
                   </div>
-                  <div className="bg-[#1a1a1a] border-t-2 border-[#dc3545] p-5 shadow-lg">
-                    <h4 className="text-[#dc3545] font-black text-xl mb-4">CONTRO</h4>
-                    <ul className="space-y-3">
+                  
+                  <div className="bg-[#1a1a1a] p-6 md:p-8 border-t-[3px] border-[#ff2020]">
+                    <h4 className="text-[#ff2020] font-black text-xl mb-5 uppercase tracking-wide">CONTRO</h4>
+                    <ul className="space-y-4">
                       {consList.map((con, idx) => (
-                        <li key={idx} className="flex items-start text-white text-[15px] font-medium"><span className="text-[#dc3545] text-lg mr-3 leading-none">●</span> {con}</li>
+                        <li key={idx} className="flex items-start text-white text-[15px] font-medium leading-snug">
+                          <span className="text-[#ff2020] text-[12px] mr-4 leading-none mt-1">●</span> {con}
+                        </li>
                       ))}
                     </ul>
                   </div>
                 </div>
+
               </div>
             </div>
           )}
@@ -441,11 +491,6 @@ export default function PaginaArticolo() {
               {newCommentText.trim() && user && (<button onClick={handlePostComment} disabled={isSubmitting} className="text-[#ff2020] font-black uppercase text-xs px-6 hover:text-white transition-colors h-full disabled:opacity-50">INVIA</button>)}
             </div>
 
-            <div className="flex items-center justify-between mb-8 border-b border-gray-800/50 pb-4">
-              <div className="flex items-center gap-2 text-white font-bold text-xs"><button className="w-6 h-6 rounded-full border border-gray-600 hover:border-[#ff2020] transition-colors">1</button></div>
-              <button className="bg-[#ff2020] text-white text-[11px] font-black uppercase tracking-widest px-3 py-1.5 rounded-sm flex items-center gap-2">DATA <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="6 9 12 15 18 9"></polyline></svg></button>
-            </div>
-
             <div className="flex flex-col">
               {parentComments.length > 0 ? parentComments.map(parentComment => (
                 <React.Fragment key={parentComment.id}>{renderComment(parentComment, false)}{getReplies(parentComment.id).map(reply => renderComment(reply, true))}</React.Fragment>
@@ -466,18 +511,6 @@ export default function PaginaArticolo() {
                 </Link>
               ))}
             </div>
-          </div>
-          <div>
-            <h4 className="text-[#ff2020] text-[11px] font-black uppercase tracking-widest border-b border-gray-800 pb-2 mb-4">Le Notizie più lette</h4>
-            <div className="flex flex-col gap-4">
-              {sidebarArticles.slice(3, 6).map(sideArt => (
-                <Link key={sideArt.id} to={`/articolo/${sideArt.id}`} className="flex gap-4 group cursor-pointer">
-                  <div className="w-24 h-16 flex-shrink-0 border border-gray-800 overflow-hidden relative"><img src={getImg(sideArt.url_immagine)} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" /></div>
-                  <h5 className="text-white font-bold text-[13px] leading-snug group-hover:text-[#ff2020] transition-colors line-clamp-3">{sideArt.titolo}</h5>
-                </Link>
-              ))}
-            </div>
-            <Link to="/articoli/news" className="block text-right text-[#ff2020] text-[10px] font-black uppercase tracking-widest mt-6 hover:underline">Leggi tutte le notizie &gt;</Link>
           </div>
         </div>
 
