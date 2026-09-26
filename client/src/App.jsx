@@ -12,7 +12,7 @@ import PaginaArticolo from './pages/PaginaArticolo';
 import PaginaPiattaforma from './pages/PaginaPiattaforma';
 import PaginaCategoria from './pages/PaginaCategoria';
 import PaginaGiochi from './pages/PaginaGiochi';
-import PaginaEditor from './pages/PaginaEditor';
+import PaginaAdmin from './pages/PaginaAdmin';
 import PaginaProfilo from './pages/PaginaProfilo';
 import PaginaVideo from './pages/PaginaVideo';
 import PaginaUtente from './pages/PaginaUtente';
@@ -32,7 +32,7 @@ export default function App() {
             <Route path="/scrivi" element={<PaginaScrivi />} />
             <Route path="/articoli/:categoria" element={<PaginaCategoria />} />
             <Route path="/giochi" element={<PaginaGiochi />} />
-            <Route path="/editor" element={<PaginaEditor />} />
+           <Route path="/admin" element={<PaginaAdmin />} />
             <Route path="/:slug" element={<PaginaPiattaforma />} />
             <Route path="/gioco/:id" element={<PaginaGioco />} />
             <Route path="/live" element={<PaginaLive />} />

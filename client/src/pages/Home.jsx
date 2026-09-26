@@ -9,7 +9,7 @@ export default function Home() {
   useEffect(() => {
     async function fetchArticoli() {
       setLoading(true);
-      const { data, error } = await supabase.from('articoli').select(`*, categorie ( nome )`).order('creato_il', { ascending: false });
+      const { data, error } = await supabase.from('articoli').select(`*, categorie ( nome )`).eq('stato', 'PUBLISHED').order('creato_il', { ascending: false });
       if (!error && data) setArticles(data);
       setLoading(false);
     }

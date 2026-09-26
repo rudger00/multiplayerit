@@ -4,6 +4,25 @@ import { supabase } from '../supabaseClient';
 import { getImg } from '../utils/helpers';
 import { useAuth } from '../context/AuthContext';
 
+import GiocoHeader from '../components/gioco/GiocoHeader';
+import TabGioco from '../components/gioco/TabGioco';
+import TabVideo from '../components/gioco/TabVideo';
+import TabRecensioni from '../components/gioco/TabRecensioni';
+import TabNotizie from '../components/gioco/TabNotizie';
+
+const TabButton = ({ tabId, label, activeTab, setActiveTab, navigate, location }) => (
+  <button 
+    onClick={() => { 
+      setActiveTab(tabId); 
+      if(location.state) navigate(location.pathname, { replace: true, state: {} }); 
+    }}
+    className={`relative px-4 py-4 cursor-pointer font-black uppercase tracking-widest text-[11px] transition-colors outline-none ${activeTab === tabId ? 'text-white' : 'text-gray-400 hover:text-gray-200'}`}
+  >
+    {label}
+    {activeTab === tabId && <div className="absolute bottom-0 left-0 w-full h-[2px] bg-[#ff2020]"></div>}
+  </button>
+);
+
 export default function PaginaGioco() {
   const { id } = useParams();
   const location = useLocation();
@@ -20,7 +39,6 @@ export default function PaginaGioco() {
   const voteRef = useRef(null);
   const hasScrolled = useRef(false); 
 
-  // STATI PER IL PULSANTE SEGUI (GIOCHI)
   const [isFollowing, setIsFollowing] = useState(false);
   const [loadingFollow, setLoadingFollow] = useState(false);
 
@@ -38,67 +56,38 @@ export default function PaginaGioco() {
   useEffect(() => {
     async function fetchData() {
       setLoading(true);
-      
-      // QUERY GIOCO: aggiunti i campi voto_lettori, numero_voti e piattaforme!
-      const { data: gameData } = await supabase
-        .from('giochi')
-        .select(`*, giochi_generi(generi(nome)), gioco_piattaforma(piattaforme(nome))`)
-        .eq('id', parseInt(id))
-        .maybeSingle();
-
+      const { data: gameData } = await supabase.from('giochi').select(`*, giochi_generi(generi(nome)), gioco_piattaforma(piattaforme(nome))`).eq('id', parseInt(id)).maybeSingle();
       if (gameData) setGame(gameData);
 
+      // FILTRO AGGIUNTO QUI SOTTO: .eq('stato', 'PUBLISHED')
       const { data: articlesData } = await supabase
         .from('articoli')
         .select(`id, titolo, url_immagine, creato_il, commenti, categorie(nome)`)
         .eq('id_gioco', parseInt(id))
+        .eq('stato', 'PUBLISHED') 
         .order('creato_il', { ascending: false });
-
+        
       if (articlesData) setArticles(articlesData);
 
       if (user) {
         const { data: userData } = await supabase.from('utenti').select('id').eq('id_auth', user.id).maybeSingle();
         if (userData) {
-          // Carica eventuale voto esistente
-          const { data: voteData } = await supabase
-            .from('voti_giochi')
-            .select('voto')
-            .eq('id_gioco', parseInt(id))
-            .eq('id_utente', userData.id)
-            .maybeSingle();
-            
+          const { data: voteData } = await supabase.from('voti_giochi').select('voto').eq('id_gioco', parseInt(id)).eq('id_utente', userData.id).maybeSingle();
           if (voteData) setMyVote(voteData.voto);
-
-          // Controllo se l'utente segue già il gioco
-          const { data: followData } = await supabase
-            .from('segui_giochi')
-            .select('*')
-            .eq('id_utente', userData.id)
-            .eq('id_gioco', parseInt(id))
-            .maybeSingle();
-
+          const { data: followData } = await supabase.from('segui_giochi').select('*').eq('id_utente', userData.id).eq('id_gioco', parseInt(id)).maybeSingle();
           if (followData) setIsFollowing(true);
         }
       }
-
       setLoading(false);
-      
-      if (!location.state?.scrollTo) {
-        window.scrollTo(0, 0);
-      }
+      if (!location.state?.scrollTo) window.scrollTo(0, 0);
     }
     fetchData();
   }, [id, user, location.state]);
 
-  // Logica Segui/Non Seguire
   const toggleFollow = async () => {
-    if (!user) {
-      openModal();
-      return;
-    }
+    if (!user) { openModal(); return; }
     setLoadingFollow(true);
     const { data: userData } = await supabase.from('utenti').select('id').eq('id_auth', user.id).maybeSingle();
-    
     if (userData && game) {
       if (isFollowing) {
         await supabase.from('segui_giochi').delete().eq('id_utente', userData.id).eq('id_gioco', game.id);
@@ -117,7 +106,6 @@ export default function PaginaGioco() {
         setLoadingVideos(true);
         const API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY || ''; 
         const query = encodeURIComponent(`${game.titolo} official trailer ita`);
-        
         try {
           const res = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${query}&maxResults=5&type=video&key=${API_KEY}`);
           const data = await res.json();
@@ -125,9 +113,7 @@ export default function PaginaGioco() {
             setYoutubeVideos(data.items);
             setMainVideo(data.items[0]);
           }
-        } catch (error) {
-          console.error("Errore fetch YouTube:", error);
-        }
+        } catch (error) { console.error("Errore fetch YouTube"); }
         setLoadingVideos(false);
       }
     }
@@ -141,17 +127,13 @@ export default function PaginaGioco() {
         try {
           const UNSPLASH_KEY = import.meta.env.VITE_UNSPLASH_API_KEY || '';
           if (!UNSPLASH_KEY) throw new Error("Chiave API Unsplash non trovata");
-
           const keyword = encodeURIComponent(`${game.titolo} video game`);
           const res = await fetch(`https://api.unsplash.com/search/photos?query=${keyword}&per_page=6&client_id=${UNSPLASH_KEY}`);
           const data = await res.json();
-          
           if (data.results && data.results.length >= 6) {
             setGameImages(data.results.map(photo => photo.urls.regular));
             setTotalImages(data.total || 35);
-          } else {
-            throw new Error("Immagini non sufficienti");
-          }
+          } else throw new Error("Immagini non sufficienti");
         } catch (error) {
           const fallbackImg = getImg(game.url_immagine);
           setGameImages([fallbackImg, fallbackImg, fallbackImg, fallbackImg, fallbackImg, fallbackImg]);
@@ -166,19 +148,14 @@ export default function PaginaGioco() {
   useEffect(() => {
     if (location.state?.scrollTo === 'immagini' && activeTab === 'video' && gameImages.length > 0 && !hasScrolled.current) {
       setTimeout(() => {
-        const sezioneImmagini = document.getElementById('sezione-immagini');
-        if (sezioneImmagini) {
-          sezioneImmagini.scrollIntoView({ behavior: 'smooth' });
-          hasScrolled.current = true; 
-        }
+        const sez = document.getElementById('sezione-immagini');
+        if (sez) { sez.scrollIntoView({ behavior: 'smooth' }); hasScrolled.current = true; }
       }, 500); 
     }
   }, [location.state, activeTab, gameImages.length]);
 
   useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (voteRef.current && !voteRef.current.contains(event.target)) setShowVoteDropdown(false);
-    };
+    const handleClickOutside = (event) => { if (voteRef.current && !voteRef.current.contains(event.target)) setShowVoteDropdown(false); };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
@@ -194,565 +171,70 @@ export default function PaginaGioco() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isLightboxOpen]);
 
-  // LOGICA AGGIORNATA: SALVATAGGIO VOTO E RICALCOLO DELLA MEDIA "LETTORI" DALLA PAGINA GIOCO
   const handleSaveVote = async () => {
-    if (!user || !game) {
-      openModal();
-      return;
-    }
-    
+    if (!user || !game) { openModal(); return; }
     const { data: userData } = await supabase.from('utenti').select('id').eq('id_auth', user.id).maybeSingle();
-    
     if (userData) {
       const votoDaSalvare = parseFloat(myVote);
-      
-      const { error } = await supabase
-        .from('voti_giochi')
-        .upsert(
-          { id_gioco: parseInt(id), id_utente: userData.id, voto: votoDaSalvare }, 
-          { onConflict: 'id_gioco, id_utente' }
-        );
-      
+      const { error } = await supabase.from('voti_giochi').upsert({ id_gioco: parseInt(id), id_utente: userData.id, voto: votoDaSalvare }, { onConflict: 'id_gioco, id_utente' });
       if (!error) {
-        const { data: tuttiVoti } = await supabase
-          .from('voti_giochi')
-          .select('voto')
-          .eq('id_gioco', parseInt(id));
-          
+        const { data: tuttiVoti } = await supabase.from('voti_giochi').select('voto').eq('id_gioco', parseInt(id));
         if (tuttiVoti && tuttiVoti.length > 0) {
-          const somma = tuttiVoti.reduce((acc, curr) => acc + curr.voto, 0);
-          const mediaReale = (somma / tuttiVoti.length).toFixed(1);
-          const numeroVotiReale = tuttiVoti.length;
-          
-          await supabase
-            .from('giochi')
-            .update({ voto_lettori: mediaReale, numero_voti: numeroVotiReale })
-            .eq('id', parseInt(id));
-            
-          setGame(prev => ({
-            ...prev,
-            voto_lettori: mediaReale,
-            numero_voti: numeroVotiReale
-          }));
+          const mediaReale = (tuttiVoti.reduce((acc, curr) => acc + curr.voto, 0) / tuttiVoti.length).toFixed(1);
+          await supabase.from('giochi').update({ voto_lettori: mediaReale, numero_voti: tuttiVoti.length }).eq('id', parseInt(id));
+          setGame(prev => ({ ...prev, voto_lettori: mediaReale, numero_voti: tuttiVoti.length }));
         }
       }
     }
     setShowVoteDropdown(false);
   };
 
-  const openLightbox = (index) => {
-    setCurrentImageIndex(index);
-    setIsLightboxOpen(true);
-  };
+  const openLightbox = (index) => { setCurrentImageIndex(index); setIsLightboxOpen(true); };
   const closeLightbox = () => setIsLightboxOpen(false);
-  const nextImage = (e) => {
-    if(e) e.stopPropagation();
-    setCurrentImageIndex((prev) => (prev + 1) % gameImages.length);
-  };
-  const prevImage = (e) => {
-    if(e) e.stopPropagation();
-    setCurrentImageIndex((prev) => (prev - 1 + gameImages.length) % gameImages.length);
-  };
+  const nextImage = (e) => { if(e) e.stopPropagation(); setCurrentImageIndex((prev) => (prev + 1) % gameImages.length); };
+  const prevImage = (e) => { if(e) e.stopPropagation(); setCurrentImageIndex((prev) => (prev - 1 + gameImages.length) % gameImages.length); };
 
   if (loading) return <div className="text-white p-10 text-center font-bold">Caricamento gioco...</div>;
   if (!game) return <div className="text-white p-10 text-center font-bold">Gioco non trovato.</div>;
 
-  const coverUrl = getImg(game.url_immagine);
-  const releaseDate = game.data_uscita ? new Date(game.data_uscita).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Da definire';
-  
-  // ESTRAZIONE DINAMICA DELLE PIATTAFORME
-  const platforms = game.gioco_piattaforma && game.gioco_piattaforma.length > 0 
-    ? game.gioco_piattaforma.map(p => p.piattaforme.nome).join(' - ') 
-    : 'ND';
-    
-  const genres = game.giochi_generi?.map(g => g.generi.nome).join(', ') || 'Non specificato';
-  
-  const sviluppatore = game.sviluppatore || 'Non specificato';
-  const publisher = game.publisher || 'Non specificato';
-  const giocatori = game.giocatori || 'Non specificato';
-  const lingua = game.lingua || 'Non specificata';
-  const pegi = game.pegi || 'Non classificato';
-  const supporto = game.supporto || 'Fisico / Digitale';
-  
   const reviews = articles.filter(a => a.categorie?.nome === 'Recensione');
   const news = articles.filter(a => a.categorie?.nome !== 'Recensione');
-  
-  const featuredArticle = articles[0];
-  const listArticles = articles.slice(1, 5);
-  
-  const TabButton = ({ id, label }) => (
-    <button 
-      onClick={() => {
-        setActiveTab(id);
-        if (location.state) {
-          navigate(location.pathname, { replace: true, state: {} });
-        }
-      }}
-      className={`relative px-4 py-4 cursor-pointer font-black uppercase tracking-widest text-[11px] transition-colors outline-none ${
-        activeTab === id ? 'text-white' : 'text-gray-400 hover:text-gray-200'
-      }`}
-    >
-      {label}
-      {activeTab === id && (
-        <div className="absolute bottom-0 left-0 w-full h-[2px] bg-[#ff2020]"></div>
-      )}
-    </button>
-  );
 
   return (
     <div className="bg-[#111111] min-h-screen pb-20 relative">
       
-      {/* ================= LIGHTBOX OVERLAY ================= */}
       {isLightboxOpen && gameImages.length > 0 && (
-        <div 
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 backdrop-blur-sm"
-          onClick={closeLightbox}
-        >
-          <button 
-            className="absolute top-6 left-6 text-white hover:text-[#ff2020] transition-colors p-2 z-[110]"
-            onClick={(e) => { e.stopPropagation(); closeLightbox(); }}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-          
-          <button 
-            className="absolute left-4 md:left-10 text-white hover:text-[#ff2020] transition-colors p-4 z-[110]"
-            onClick={prevImage}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-          
-          <img 
-            src={gameImages[currentImageIndex]} 
-            alt={`Screenshot ${currentImageIndex + 1}`} 
-            className="max-w-[90vw] max-h-[90vh] object-contain select-none shadow-2xl"
-            onClick={(e) => e.stopPropagation()} 
-          />
-          
-          <button 
-            className="absolute right-4 md:right-10 text-white hover:text-[#ff2020] transition-colors p-4 z-[110]"
-            onClick={nextImage}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
-          
-          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-gray-400 font-bold tracking-widest text-sm">
-            {currentImageIndex + 1} / {gameImages.length}
-          </div>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 backdrop-blur-sm" onClick={closeLightbox}>
+          <button className="absolute top-6 left-6 text-white hover:text-[#ff2020] transition-colors p-2 z-[110]" onClick={(e) => { e.stopPropagation(); closeLightbox(); }}><svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
+          <button className="absolute left-4 md:left-10 text-white hover:text-[#ff2020] transition-colors p-4 z-[110]" onClick={prevImage}><svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg></button>
+          <img src={gameImages[currentImageIndex]} alt="Screenshot" className="max-w-[90vw] max-h-[90vh] object-contain select-none shadow-2xl" onClick={(e) => e.stopPropagation()} />
+          <button className="absolute right-4 md:right-10 text-white hover:text-[#ff2020] transition-colors p-4 z-[110]" onClick={nextImage}><svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg></button>
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-gray-400 font-bold tracking-widest text-sm">{currentImageIndex + 1} / {gameImages.length}</div>
         </div>
       )}
 
-      {/* HEADER */}
-      <div className="relative w-full h-[350px] md:h-[400px] flex justify-center pt-8">
-        <div className="absolute inset-0 bg-cover bg-center bg-no-repeat blur-xl opacity-40 scale-110" style={{ backgroundImage: `url(${coverUrl})` }}></div>
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#111111]/80 to-[#111111]"></div>
-        
-        <div className="absolute top-4 left-4 md:left-[10%] text-white text-xs font-bold z-10">
-          <Link to="/" className="hover:text-[#ff2020]">Multiplayer.it</Link> <span className="text-gray-500">/</span> <Link to="/giochi" className="hover:text-[#ff2020]">Giochi</Link> <span className="text-gray-500">/</span> {game.titolo}
-        </div>
-
-        <div className="relative z-10 w-full max-w-[1000px] px-4 flex flex-col md:flex-row items-end gap-6 pb-10">
-          <img src={coverUrl} alt={game.titolo} className="w-[180px] md:w-[220px] rounded-md shadow-2xl border-4 border-[#1a1a1a]" />
-          
-          <div className="bg-[#1a1a1a]/90 backdrop-blur-sm p-6 flex-grow rounded-sm shadow-xl flex flex-col justify-center border border-gray-800">
-            <div className="flex items-center gap-4 mb-4">
-              
-              <button 
-                onClick={toggleFollow}
-                disabled={loadingFollow}
-                className={`border rounded-full font-black uppercase text-xs px-6 py-2 transition-colors ${
-                  isFollowing 
-                    ? 'bg-[#ff2020] border-[#ff2020] text-white hover:bg-red-700' 
-                    : 'text-[#ff2020] border-[#ff2020] hover:bg-[#ff2020] hover:text-white'
-                }`}
-              >
-                {isFollowing ? 'NON SEGUIRE' : 'SEGUI'}
-              </button>
-              
-              <div>
-                {activeTab === 'gioco' && <h1 className="text-3xl font-black text-white">{game.titolo}</h1>}
-                {activeTab === 'recensioni' && <h1 className="text-2xl font-black text-white"><span className="text-[#ff2020]">Recensioni</span> di<br/>{game.titolo}</h1>}
-                {activeTab === 'notizie' && <h1 className="text-2xl font-black text-white"><span className="text-[#ff2020]">Notizie</span> di<br/>{game.titolo}</h1>}
-                {activeTab === 'video' && <h1 className="text-2xl font-black text-white"><span className="text-[#ff2020]">Video e immagini</span> di<br/>{game.titolo}</h1>}
-              </div>
-            </div>
-            
-            {activeTab === 'gioco' && (
-              <div className="flex items-center gap-6 mb-4 relative" ref={voteRef}>
-                <div className="flex items-center gap-3 relative">
-                  <div className="w-10 h-10 bg-[#ff2020] rounded-full flex items-center justify-center text-white font-black text-sm shadow-md">
-                    {game.voto_redazione ? parseFloat(game.voto_redazione).toFixed(1) : '-'}
-                  </div>
-                  
-                  <div 
-                    onClick={() => { if(!user) openModal(); else setShowVoteDropdown(!showVoteDropdown); }}
-                    className="w-10 h-10 border border-gray-500 rounded-full flex items-center justify-center text-gray-300 font-black text-[10px] uppercase shadow-md cursor-pointer hover:border-white hover:text-white transition-colors"
-                  >
-                    {myVote !== 5.0 ? parseFloat(myVote).toFixed(1) : 'VOTA!'}
-                  </div>
-                  
-                  <div className="w-10 h-10 border border-[#00bfff] rounded-full flex items-center justify-center text-[#00bfff] font-black text-sm shadow-md">
-                    {game.voto_lettori && game.voto_lettori > 0 ? parseFloat(game.voto_lettori).toFixed(1) : '-'}
-                  </div>
-
-                  {showVoteDropdown && (
-                    <div className="absolute top-14 left-1/2 -translate-x-1/2 bg-[#2a2a2a] p-4 rounded-md shadow-2xl border border-gray-700 w-64 z-50 flex flex-col gap-3">
-                      <div className="flex items-center justify-between text-white font-bold">
-                        <span className="text-xs text-gray-400">Il tuo voto</span>
-                        <span className="text-xl text-[#ff2020]">{parseFloat(myVote).toFixed(1)}</span>
-                      </div>
-                      <input type="range" min="0" max="10" step="0.1" value={myVote} onChange={(e) => setMyVote(e.target.value)} className="w-full accent-[#ff2020]" />
-                      <button onClick={handleSaveVote} className="w-full bg-[#ff2020] text-white text-xs font-bold uppercase py-2 rounded-sm hover:bg-red-700">Conferma Voto</button>
-                    </div>
-                  )}
-                </div>
-                <div className="h-10 w-[1px] bg-gray-700"></div>
-                <div className="text-xs text-gray-300 font-semibold leading-relaxed text-left">
-                  <p><span className="text-[#ff2020]">●</span> Uscita: <span className="text-white">{releaseDate}</span></p>
-                  <p><span className="text-[#ff2020]">●</span> Disponibile per: <span className="text-white">{platforms}</span></p>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+      <GiocoHeader 
+        game={game} activeTab={activeTab} isFollowing={isFollowing} 
+        toggleFollow={toggleFollow} loadingFollow={loadingFollow} 
+        myVote={myVote} setMyVote={setMyVote} 
+        showVoteDropdown={showVoteDropdown} setShowVoteDropdown={setShowVoteDropdown} 
+        handleSaveVote={handleSaveVote} user={user} openModal={openModal} voteRef={voteRef} 
+      />
 
       <div className="w-full border-b border-gray-800 bg-[#111111]">
         <div className="max-w-[1000px] mx-auto flex items-center justify-center flex-wrap gap-x-2 md:gap-x-12">
-          <TabButton id="gioco" label="Gioco" />
-          <TabButton id="recensioni" label="Recensioni e Approfondimenti" />
-          <TabButton id="notizie" label="Ultime notizie" />
-          <TabButton id="video" label="Video e Immagini" />
+          <TabButton tabId="gioco" label="Gioco" activeTab={activeTab} setActiveTab={setActiveTab} navigate={navigate} location={location} />
+          <TabButton tabId="recensioni" label="Recensioni e Approfondimenti" activeTab={activeTab} setActiveTab={setActiveTab} navigate={navigate} location={location} />
+          <TabButton tabId="notizie" label="Ultime notizie" activeTab={activeTab} setActiveTab={setActiveTab} navigate={navigate} location={location} />
+          <TabButton tabId="video" label="Video e Immagini" activeTab={activeTab} setActiveTab={setActiveTab} navigate={navigate} location={location} />
         </div>
       </div>
 
       <main className="max-w-[1000px] mx-auto px-4 mt-8">
-        
-        {/* ==================== TAB GIOCO ==================== */}
-        {activeTab === 'gioco' && (
-          <>
-            <div className="text-gray-300 text-sm font-semibold leading-relaxed mb-12 text-left">
-              <p className="mb-2">
-                <strong className="text-white">{game.titolo}</strong> è un titolo sviluppato da {sviluppatore !== 'Non specificato' ? sviluppatore : 'vari sviluppatori'}.
-              </p>
-              <p>
-                {game.descrizione || "Descrizione non disponibile al momento."}
-                {game.descrizione && <span className="text-[#ff2020] cursor-pointer hover:underline ml-2 font-bold">Leggi tutto</span>}
-              </p>
-            </div>
-
-            <div className="flex items-center justify-center mb-8">
-              <div className="flex-1 max-w-[250px] h-[2px] bg-[#ff2020]"></div>
-              <h2 className="text-white font-black text-lg px-4 uppercase tracking-widest whitespace-nowrap text-center">Video in evidenza</h2>
-              <div className="flex-1 max-w-[250px] h-[2px] bg-[#ff2020]"></div>
-            </div>
-
-            <div className="bg-[#1a1a1a] p-4 rounded-sm border border-gray-800 mb-16 shadow-lg flex flex-col items-center">
-              {loadingVideos ? (
-                <div className="w-full aspect-video flex items-center justify-center bg-black rounded-sm">
-                  <span className="text-white font-bold">Ricerca trailer in corso...</span>
-                </div>
-              ) : mainVideo ? (
-                <>
-                  <div className="w-full aspect-video bg-black relative flex items-center justify-center rounded-sm overflow-hidden mb-4">
-                    <iframe 
-                      className="w-full h-full" 
-                      src={`https://www.youtube.com/embed/${mainVideo.id.videoId}?autoplay=0`} 
-                      title={mainVideo.snippet.title} 
-                      frameBorder="0" 
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                      allowFullScreen
-                    ></iframe>
-                  </div>
-                  <h3 className="text-white font-bold text-xl text-center leading-tight px-4 pb-2">{mainVideo.snippet.title}</h3>
-                </>
-              ) : (
-                <>
-                  <div className="w-full aspect-video bg-black relative flex items-center justify-center cursor-pointer group rounded-sm overflow-hidden mb-4">
-                    <img src={coverUrl} alt="Video Thumbnail" className="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:opacity-60 transition-opacity" />
-                    <div className="relative z-10 w-16 h-12 bg-white flex items-center justify-center pl-2 rounded-sm shadow-xl">
-                      <div className="w-0 h-0 border-t-8 border-b-8 border-l-[14px] border-transparent border-l-black"></div>
-                    </div>
-                  </div>
-                  <h3 className="text-white font-bold text-xl text-center leading-tight px-4 pb-2">{game.titolo} - Trailer Ufficiale</h3>
-                </>
-              )}
-            </div>
-
-            <div className="flex items-center justify-center mb-8">
-              <div className="flex-1 max-w-[250px] h-[2px] bg-[#ff2020]"></div>
-              <h2 className="text-white font-black text-lg px-4 uppercase tracking-widest whitespace-nowrap text-center">I contenuti più discussi</h2>
-              <div className="flex-1 max-w-[250px] h-[2px] bg-[#ff2020]"></div>
-            </div>
-
-            {articles.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-1 mb-16">
-                
-                {featuredArticle && (
-                  <div className="md:col-span-6 bg-[#1a1a1a] border border-gray-800 group cursor-pointer flex flex-col relative">
-                    <Link to={`/articolo/${featuredArticle.id}`} className="block h-full">
-                      <div className="relative w-full h-[250px] overflow-hidden">
-                        <img src={getImg(featuredArticle.url_immagine)} alt={featuredArticle.titolo} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                        <div className="absolute -bottom-3 right-4 bg-[#ff2020] text-white text-[11px] font-black px-2 py-1 rounded-full shadow-md z-10">
-                          {featuredArticle.commenti || 0}
-                        </div>
-                      </div>
-                      <div className="p-5 flex flex-col flex-grow text-left">
-                        <h3 className="text-white font-black text-2xl leading-tight mb-3 group-hover:text-[#ff2020] transition-colors">{featuredArticle.titolo}</h3>
-                        <p className="text-gray-400 text-sm font-semibold line-clamp-3 mb-4">Scopri tutte le novità, le analisi e cosa ne pensa la nostra community di questo titolo.</p>
-                        <div className="mt-auto flex items-center justify-between text-[10px] font-black uppercase tracking-widest">
-                          <span className="text-[#ff2020]">{featuredArticle.categorie?.nome || 'Notizia'}</span>
-                          <span className="text-gray-500">{new Date(featuredArticle.creato_il).toLocaleDateString('it-IT')}</span>
-                        </div>
-                      </div>
-                    </Link>
-                  </div>
-                )}
-
-                <div className="md:col-span-6 flex flex-col gap-1">
-                  {listArticles.map(art => (
-                    <Link key={art.id} to={`/articolo/${art.id}`} className="bg-[#1a1a1a] border border-gray-800 flex h-[115px] group cursor-pointer relative overflow-visible text-left">
-                      <div className="p-4 flex flex-col justify-between flex-grow">
-                        <h4 className="text-white font-bold text-[15px] leading-tight group-hover:text-[#ff2020] transition-colors line-clamp-2">{art.titolo}</h4>
-                        <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest">
-                          <span className="text-gray-500 hover:text-[#ff2020] transition-colors">{art.categorie?.nome || 'Notizia'}</span>
-                          <span className="text-gray-600">{new Date(art.creato_il).toLocaleDateString('it-IT')}</span>
-                        </div>
-                      </div>
-                      <div className="w-[180px] h-full relative flex-shrink-0 overflow-hidden">
-                        <img src={getImg(art.url_immagine)} alt={art.titolo} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                        <div className="absolute top-2 right-2 bg-[#ff2020] text-white text-[10px] font-black px-1.5 py-0.5 rounded-full shadow-md z-10">
-                          {art.commenti || 0}
-                        </div>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-
-              </div>
-            ) : (
-              <p className="text-center text-gray-500 mb-16">Nessun articolo trovato per questo gioco.</p>
-            )}
-
-            {/* INFORMAZIONI DINAMICHE DAL DATABASE */}
-            <div className="bg-[#1a1a1a] border-t-2 border-[#ff2020] p-8 flex flex-col md:flex-row gap-8 mb-10 shadow-lg text-left">
-              <div className="md:w-1/3">
-                <h3 className="text-[#ff2020] font-black text-xl leading-tight mb-4">Informazioni dettagliate<br/>di {game.titolo}</h3>
-                <div className="grid grid-cols-2 gap-y-2 text-xs font-semibold">
-                  <span className="text-gray-400">Prima uscita:</span>
-                  <span className="text-white font-bold">{releaseDate}</span>
-                  <span className="text-gray-400">Tipologia di gioco:</span>
-                  <span className="text-white font-bold border-b border-gray-600 w-fit">{genres}</span>
-                </div>
-              </div>
-              
-              <div className="md:w-2/3 grid grid-cols-2 text-xs font-semibold gap-y-2">
-                <span className="text-gray-400">Sviluppato da:</span>
-                <span className="text-white font-bold">{sviluppatore}</span>
-                <span className="text-gray-400">Publisher:</span>
-                <span className="text-white font-bold">{publisher}</span>
-                <span className="text-gray-400">Giocatori:</span>
-                <span className="text-white font-bold">{giocatori}</span>
-                <span className="text-gray-400">Lingua:</span>
-                <span className="text-white font-bold">{lingua}</span>
-                <span className="text-gray-400">PEGI:</span>
-                <span className="text-white font-bold">{pegi}</span>
-                <span className="text-gray-400">Supporto:</span>
-                <span className="text-white font-bold">{supporto}</span>
-              </div>
-            </div>
-          </>
-        )}
-
-        {/* ==================== TAB RECENSIONI ==================== */}
-        {activeTab === 'recensioni' && (
-          <>
-            <div className="flex items-center justify-center mb-8">
-              <div className="flex-1 max-w-[250px] h-[2px] bg-[#ff2020]"></div>
-              <h2 className="text-white font-black text-lg px-4 uppercase tracking-widest text-center">Recensioni</h2>
-              <div className="flex-1 max-w-[250px] h-[2px] bg-[#ff2020]"></div>
-            </div>
-            
-            {reviews.length > 0 ? (
-              <div className="flex justify-center mb-16 text-left">
-                <Link to={`/articolo/${reviews[0].id}`} className="relative group w-[400px] aspect-square rounded-sm overflow-hidden block border border-gray-800">
-                  <img src={getImg(reviews[0].url_immagine)} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent flex flex-col justify-end p-6">
-                    <span className="text-white text-xs font-black uppercase bg-black/50 w-fit px-2 py-1 mb-2 border border-gray-500">Recensione PC</span>
-                    <h3 className="text-white font-black text-xl leading-tight group-hover:text-[#ff2020] transition-colors">{reviews[0].titolo}</h3>
-                  </div>
-                  <div className="absolute bottom-6 right-6 w-12 h-12 bg-[#1a1a1a]/80 backdrop-blur-md rounded-full flex items-center justify-center border-2 border-[#ff2020] text-white font-black shadow-lg">10</div>
-                </Link>
-              </div>
-            ) : (<p className="text-center text-gray-500 mb-16">Nessuna recensione disponibile.</p>)}
-            
-            <div className="flex items-center justify-center mb-8">
-              <div className="flex-1 max-w-[250px] h-[2px] bg-[#ff2020]"></div>
-              <h2 className="text-white font-black text-lg px-4 uppercase tracking-widest text-center">Approfondimenti</h2>
-              <div className="flex-1 max-w-[250px] h-[2px] bg-[#ff2020]"></div>
-            </div>
-            
-            <div className="flex justify-center gap-2 mb-8 flex-wrap">
-              {['TUTTI', 'NSW', 'PC', 'PS4', 'PS5', 'XBOXSERIESX'].map(p => (
-                <button key={p} className={`px-4 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-widest cursor-pointer outline-none ${p === 'TUTTI' ? 'bg-[#ff2020] text-white border-[#ff2020]' : 'border-gray-700 text-gray-400 hover:border-white hover:text-white'}`}>{p}</button>
-              ))}
-            </div>
-
-            <div className="flex flex-col gap-4 text-left">
-              {articles.slice(1, 3).map(art => (
-                <Link key={art.id} to={`/articolo/${art.id}`} className="bg-[#1a1a1a] border border-gray-800 flex h-[140px] group cursor-pointer rounded-sm hover:border-gray-600 transition-colors">
-                  <img src={getImg(art.url_immagine)} alt={art.titolo} className="w-[220px] h-full object-cover" />
-                  <div className="p-5 flex flex-col justify-center flex-grow relative">
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-[#ff2020] text-[10px] font-black uppercase tracking-widest">{art.categorie?.nome || 'Approfondimento'} <span className="text-gray-500">• {new Date(art.creato_il).toLocaleDateString('it-IT')}</span></span>
-                      <span className="text-white text-[10px] font-black bg-[#ff2020] px-2 py-0.5 rounded-full shadow-md">{art.commenti || 0}</span>
-                    </div>
-                    <h3 className="text-white font-bold text-xl leading-tight group-hover:text-[#ff2020] transition-colors line-clamp-2">{art.titolo}</h3>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </>
-        )}
-
-        {/* ==================== TAB NOTIZIE ==================== */}
-        {activeTab === 'notizie' && (
-          <>
-            <div className="flex items-center justify-center mb-8">
-              <div className="flex-1 max-w-[250px] h-[2px] bg-[#ff2020]"></div>
-              <h2 className="text-white font-black text-lg px-4 uppercase tracking-widest text-center">Ultimi aggiornamenti</h2>
-              <div className="flex-1 max-w-[250px] h-[2px] bg-[#ff2020]"></div>
-            </div>
-
-            <div className="flex justify-center gap-2 mb-8 flex-wrap">
-              {['TUTTI', 'NSW', 'PC', 'PS4', 'PS5', 'XBOXSERIESX'].map(p => (
-                <button key={p} className={`px-4 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-widest cursor-pointer outline-none ${p === 'TUTTI' ? 'bg-[#ff2020] text-white border-[#ff2020]' : 'border-gray-700 text-gray-400 hover:border-white hover:text-white'}`}>{p}</button>
-              ))}
-            </div>
-
-            <div className="flex flex-col gap-4 text-left">
-              {news.map(art => (
-                <Link key={art.id} to={`/articolo/${art.id}`} className="bg-[#1a1a1a] border border-gray-800 flex h-[140px] group cursor-pointer rounded-sm hover:border-gray-600 transition-colors">
-                  <img src={getImg(art.url_immagine)} alt={art.titolo} className="w-[220px] h-full object-cover" />
-                  <div className="p-5 flex flex-col justify-center flex-grow">
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-[#ff2020] text-[10px] font-black uppercase tracking-widest">{art.categorie?.nome || 'Notizia'} <span className="text-gray-500">• {new Date(art.creato_il).toLocaleDateString('it-IT')}</span></span>
-                      <span className="text-gray-500 text-xs flex items-center gap-1 font-bold">{art.commenti || 0} <span className="text-[#ff2020] text-base leading-none">●</span></span>
-                    </div>
-                    <h3 className="text-white font-bold text-xl leading-tight group-hover:text-[#ff2020] transition-colors">{art.titolo}</h3>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </>
-        )}
-
-        {/* ==================== TAB VIDEO E IMMAGINI ==================== */}
-        {activeTab === 'video' && (
-          <>
-            <div className="flex items-center justify-center mb-8">
-              <div className="flex-1 max-w-[250px] h-[2px] bg-[#ff2020]"></div>
-              <h2 className="text-white font-black text-lg px-4 uppercase tracking-widest text-center">Tutti i video</h2>
-              <div className="flex-1 max-w-[250px] h-[2px] bg-[#ff2020]"></div>
-            </div>
-
-            {loadingVideos ? (
-              <p className="text-center text-white font-bold mb-16">Ricerca video su YouTube in corso...</p>
-            ) : mainVideo ? (
-              <>
-                <div className="w-full aspect-video bg-black relative flex items-center justify-center mb-8 border border-gray-800 shadow-xl">
-                  <iframe 
-                    className="w-full h-full" 
-                    src={`https://www.youtube.com/embed/${mainVideo.id.videoId}?autoplay=0`} 
-                    title={mainVideo.snippet.title} 
-                    frameBorder="0" 
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                    allowFullScreen
-                  ></iframe>
-                </div>
-
-                <h3 className="text-[#ff2020] font-black text-xl text-center px-4 mb-6">{mainVideo.snippet.title}</h3>
-
-                <div className="flex items-center justify-center gap-4 mb-16">
-                  <button className="w-10 h-10 flex-shrink-0 bg-[#2a2a2a] hover:bg-[#ff2020] rounded-full flex items-center justify-center text-white font-black transition-colors shadow-lg">&lt;</button>
-                  
-                  <div className="flex gap-4 overflow-hidden w-full max-w-[850px]">
-                    {youtubeVideos.slice(0, 4).map((video) => (
-                      <div 
-                        key={video.id.videoId} 
-                        onClick={() => setMainVideo(video)}
-                        className="flex-shrink-0 w-[calc(25%-12px)] cursor-pointer group"
-                      >
-                        <div className={`w-full aspect-video relative mb-3 border-2 transition-colors ${mainVideo.id.videoId === video.id.videoId ? 'border-white' : 'border-transparent group-hover:border-gray-500'}`}>
-                          <img src={video.snippet.thumbnails.medium.url} alt={video.snippet.title} className="w-full h-full object-cover" />
-                        </div>
-                        <p className="text-white text-[12px] font-bold leading-tight line-clamp-3 text-center px-1">{video.snippet.title}</p>
-                      </div>
-                    ))}
-                  </div>
-                  
-                  <button className="w-10 h-10 flex-shrink-0 bg-[#2a2a2a] hover:bg-[#ff2020] rounded-full flex items-center justify-center text-white font-black transition-colors shadow-lg">&gt;</button>
-                </div>
-              </>
-            ) : (
-              <p className="text-center text-gray-500 mb-16">Video non disponibili.</p>
-            )}
-
-            {/* SEZIONE TUTTE LE IMMAGINI (Con ID per lo scroll automatico) */}
-            <div id="sezione-immagini" className="flex items-center justify-center mb-8 pt-8">
-              <div className="flex-1 max-w-[300px] h-[1px] bg-gray-600"></div>
-              <h2 className="text-white font-black text-lg px-4 uppercase tracking-widest text-center">Tutte le immagini</h2>
-              <div className="flex-1 max-w-[300px] h-[1px] bg-gray-600"></div>
-            </div>
-
-            {loadingImages ? (
-              <p className="text-center text-white font-bold pb-12">Caricamento immagini in corso...</p>
-            ) : gameImages.length >= 6 ? (
-              <div className="grid grid-cols-6 gap-0 pb-12">
-                
-                <div className="col-span-6 h-[400px] md:h-[500px] overflow-hidden cursor-pointer" onClick={() => openLightbox(0)}>
-                  <img src={gameImages[0]} alt="Screenshot 1" className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" />
-                </div>
-                
-                <div className="col-span-3 h-[200px] md:h-[300px] overflow-hidden cursor-pointer" onClick={() => openLightbox(1)}>
-                  <img src={gameImages[1]} alt="Screenshot 2" className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" />
-                </div>
-                
-                <div className="col-span-3 h-[200px] md:h-[300px] overflow-hidden cursor-pointer" onClick={() => openLightbox(2)}>
-                  <img src={gameImages[2]} alt="Screenshot 3" className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" />
-                </div>
-
-                <div className="col-span-2 h-[120px] md:h-[200px] overflow-hidden cursor-pointer" onClick={() => openLightbox(3)}>
-                  <img src={gameImages[3]} alt="Screenshot 4" className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" />
-                </div>
-                
-                <div className="col-span-2 h-[120px] md:h-[200px] overflow-hidden cursor-pointer" onClick={() => openLightbox(4)}>
-                  <img src={gameImages[4]} alt="Screenshot 5" className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" />
-                </div>
-                
-                <div className="col-span-2 h-[120px] md:h-[200px] relative overflow-hidden cursor-pointer group" onClick={() => openLightbox(5)}>
-                  <img src={gameImages[5]} alt="Screenshot 6" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                  <div className="absolute inset-0 bg-[#ff2020]/80 flex items-center justify-center transition-colors hover:bg-[#ff2020]/90">
-                    <span className="text-white font-black text-2xl md:text-4xl drop-shadow-md">
-                      +{totalImages > 6 ? totalImages - 5 : 34}
-                    </span>
-                  </div>
-                </div>
-
-              </div>
-            ) : (
-              <p className="text-center text-gray-500 pb-12">Nessuna immagine trovata.</p>
-            )}
-
-          </>
-        )}
-
+        {activeTab === 'gioco' && <TabGioco game={game} articles={articles} mainVideo={mainVideo} loadingVideos={loadingVideos} />}
+        {activeTab === 'recensioni' && <TabRecensioni reviews={reviews} articles={articles} />}
+        {activeTab === 'notizie' && <TabNotizie news={news} />}
+        {activeTab === 'video' && <TabVideo mainVideo={mainVideo} setMainVideo={setMainVideo} youtubeVideos={youtubeVideos} loadingVideos={loadingVideos} gameImages={gameImages} loadingImages={loadingImages} totalImages={totalImages} openLightbox={openLightbox} />}
       </main>
     </div>
   );

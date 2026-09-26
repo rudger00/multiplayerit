@@ -32,8 +32,6 @@ export default function PaginaScrivi() {
   const [testoConclusioni, setTestoConclusioni] = useState('');
   const [pro, setPro] = useState('');
   const [contro, setContro] = useState('');
-  
-  // SBLOCCATO VERSIONE TESTATA
   const [versioneTestata, setVersioneTestata] = useState('');
 
   const isRecensione = parseInt(idCategoria) === 2;
@@ -96,8 +94,12 @@ export default function PaginaScrivi() {
       return;
     }
 
-    const { data: userData } = await supabase.from('utenti').select('id').eq('id_auth', user.id).single();
+    // Qui controlliamo il ruolo dell'utente che sta scrivendo l'articolo
+    const { data: userData } = await supabase.from('utenti').select('id, id_ruolo').eq('id_auth', user.id).single();
     const currentIsoDate = new Date().toISOString();
+
+    // LOGICA DI APPROVAZIONE: Admin (1) pubblica diretto in PUBLISHED. Redattore (2) va in DRAFT.
+    const statoArticolo = userData.id_ruolo === 1 ? 'PUBLISHED' : 'DRAFT';
 
     const newArticle = {
       titolo: titolo,
@@ -108,6 +110,7 @@ export default function PaginaScrivi() {
       id_categoria: parseInt(idCategoria),
       id_gioco: idGioco ? parseInt(idGioco) : null,
       id_autore: userData.id, 
+      stato: statoArticolo, // Salvataggio dello stato
       creato_il: currentIsoDate,
       aggiornato_il: currentIsoDate 
     };
@@ -117,16 +120,21 @@ export default function PaginaScrivi() {
       newArticle.testo_conclusioni = testoConclusioni;
       newArticle.pro = pro;       
       newArticle.contro = contro; 
-      newArticle.versione_testata = versioneTestata; // SBLOCCATO
+      newArticle.versione_testata = versioneTestata;
     }
 
     const { error } = await supabase.from('articoli').insert([newArticle]).select();
 
     if (error) {
       console.error("Errore salvataggio:", error);
-      alert("Errore salvataggio: Assicurati di aver aggiunto la colonna 'versione_testata' in Supabase!");
+      alert("Errore salvataggio: " + error.message);
     } else {
-      setSuccessMsg("Articolo pubblicato con successo!");
+      if (statoArticolo === 'PUBLISHED') {
+        setSuccessMsg("Articolo pubblicato online con successo!");
+      } else {
+        setSuccessMsg("Articolo inviato in revisione (DRAFT)! Sarà visibile non appena un Amministratore lo approverà.");
+      }
+      
       setTitolo(''); setSommario(''); setUrlImmagine(''); setIdCategoria(''); setIdGioco(''); setUrlVideo('');
       setContenuto(''); setVotoRedazione(''); setPro(''); setContro(''); setTestoConclusioni(''); setVersioneTestata('');
       setViewMode('editor');
@@ -187,7 +195,6 @@ export default function PaginaScrivi() {
   const embedUrl = getYouTubeEmbedUrl(urlVideo);
   
   const catSelezionata = categorie.find(c => c.id === parseInt(idCategoria))?.nome || 'CATEGORIA';
-  const giocoSelezionatoInfo = giochi.find(g => g.id === parseInt(idGioco));
 
   if (loading) return <div className="text-white text-center py-20 font-bold">Verifica permessi e caricamento dati in corso...</div>;
 
@@ -389,13 +396,12 @@ export default function PaginaScrivi() {
                 Annulla
               </button>
               <button type="submit" disabled={isSubmitting} className="px-10 py-3 bg-[#ff2020] text-white font-black uppercase text-xs tracking-widest hover:bg-red-700 transition-colors rounded-sm shadow-lg disabled:opacity-50">
-                {isSubmitting ? 'Pubblicazione...' : 'Pubblica Articolo'}
+                {isSubmitting ? 'Salvataggio in corso...' : 'Invia Articolo'}
               </button>
             </div>
           </form>
         </div>
 
-        {/* MODALITÀ 2: LIVE PREVIEW */}
         <div className={viewMode === 'preview' ? 'block' : 'hidden'}>
           <div className="bg-[#111111] border border-gray-800 p-8 shadow-2xl rounded-sm">
             
@@ -435,11 +441,9 @@ export default function PaginaScrivi() {
             <div className="prose prose-invert max-w-none text-gray-300 text-[17px] leading-relaxed custom-quill-content break-words [&_img]:block [&_img]:mx-auto [&_img]:my-8 [&_img]:max-w-full [&_img]:rounded-md [&_img]:shadow-xl [&_iframe]:w-full [&_iframe]:aspect-video [&_iframe]:my-8" 
                  dangerouslySetInnerHTML={{ __html: contenuto || '<p class="text-gray-600 italic">Il testo dell\'articolo apparirà qui...</p>' }} />
 
-            {/* TABELLONE CONCLUSIONIS PREVIEW VERTICALE */}
             {isRecensione && (
               <div className="mt-16 w-full font-sans bg-[#7a1212] shadow-2xl mb-12 flex flex-col">
                 
-                {/* Box Titolo & Versione */}
                 <div className="pt-8 pb-6 flex flex-col items-center">
                   <h3 className="text-white font-black text-2xl md:text-3xl uppercase tracking-widest drop-shadow-md">Conclusioni</h3>
                   {versioneTestata && (
@@ -450,7 +454,6 @@ export default function PaginaScrivi() {
                   )}
                 </div>
 
-                {/* Fascia Scura Centrale (Voti) */}
                 <div className="bg-[#1a1a1a] w-full py-8 px-4 flex flex-row justify-center items-center gap-6 md:gap-24 border-y-2 border-black/30">
                   <div className="flex flex-col items-center">
                     <span className="text-[#ff2020] text-[10px] md:text-[11px] font-black tracking-widest uppercase mb-1">Multiplayer.it</span>
@@ -467,7 +470,6 @@ export default function PaginaScrivi() {
                   </div>
                 </div>
 
-                {/* Testo e Pro/Contro */}
                 <div className="p-8 md:p-10 flex flex-col">
                   <p className="text-white text-[15px] font-medium leading-relaxed mb-10 text-justify">
                     {testoConclusioni || "Inserisci il testo delle conclusioni nell'editor per vederlo qui..."}

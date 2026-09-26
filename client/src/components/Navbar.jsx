@@ -37,9 +37,11 @@ export default function Navbar() {
 
   useEffect(() => {
     async function fetchDropdownData() {
-      const { data: newsData } = await supabase.from('articoli').select('id, titolo, url_immagine, creato_il').order('creato_il', { ascending: false }).limit(5);
+      // Peschiamo solo articoli pubblicati
+      const { data: newsData } = await supabase.from('articoli').select('id, titolo, url_immagine, creato_il').eq('stato', 'PUBLISHED').order('creato_il', { ascending: false }).limit(5);
       if (newsData) setNavNews(newsData);
-      const { data: recData } = await supabase.from('articoli').select('id, titolo, url_immagine, corpo, creato_il').eq('id_categoria', 2).order('creato_il', { ascending: false }).limit(5);
+      
+      const { data: recData } = await supabase.from('articoli').select('id, titolo, url_immagine, corpo, creato_il').eq('stato', 'PUBLISHED').eq('id_categoria', 2).order('creato_il', { ascending: false }).limit(5);
       if (recData && recData.length > 0) setNavRecensioni(recData);
       else if (newsData) setNavRecensioni(newsData); 
     }
@@ -82,7 +84,7 @@ export default function Navbar() {
   useEffect(() => {
     const fetchLiveResults = async () => {
       if (searchQuery.trim().length > 2) {
-        const { data } = await supabase.from('articoli').select(`*, categorie ( nome )`).ilike('titolo', `%${searchQuery}%`).limit(4);
+        const { data } = await supabase.from('articoli').select(`*, categorie ( nome )`).eq('stato', 'PUBLISHED').ilike('titolo', `%${searchQuery}%`).limit(4);
         if (data) setLiveSearchResults(data);
       } else { setLiveSearchResults([]); }
     };
@@ -100,12 +102,13 @@ export default function Navbar() {
 
   const closeAll = () => { setHoveredDropdown(null); setLockedDropdown(null); setIsSearchOpen(false); setIsProfileOpen(false); };
   
-  // LA RIGA MANCANTE RIPRISTINATA:
   const isOpen = (name) => hoveredDropdown === name || lockedDropdown === name;
   
   const usernameVisualizzato = user?.user_metadata?.username || user?.email?.split('@')[0] || "Utente";
 
+  // Variabili per i ruoli
   const isReporter = userRole === 1 || userRole === 2;
+  const isAdmin = userRole === 1;
 
   return (
     <nav className="sticky top-0 w-full flex items-center justify-between bg-[#1a1a1a] h-14 border-b border-gray-800 z-[100] shadow-sm">
@@ -136,6 +139,16 @@ export default function Navbar() {
       ) : (
         <ul className="hidden lg:flex items-center h-full space-x-1 text-[11px] font-bold tracking-widest text-white ml-auto">
           
+          {/* TASTO AREA ADMIN RISERVATO */}
+          {isAdmin && (
+            <li className="relative h-full flex items-center">
+              <Link to="/admin" onClick={closeAll} className="px-3 text-[#ff2020] hover:text-white transition-colors uppercase h-full flex items-center gap-1.5 border-b-2 border-transparent hover:border-[#ff2020]">
+                ⚙️ ADMIN
+              </Link>
+            </li>
+          )}
+
+          {/* TASTO SCRIVI (VISIBILE AD ADMIN E REDATTORI) */}
           {isReporter && (
             <li className="relative h-full flex items-center">
               <Link to="/scrivi" onClick={closeAll} className="px-3 text-[#fffff] hover:text-white transition-colors uppercase h-full flex items-center gap-1.5 border-b-2 border-transparent hover:border-[#ff2020]">
