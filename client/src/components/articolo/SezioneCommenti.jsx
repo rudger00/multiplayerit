@@ -1,83 +1,161 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
-
-const ThumbUp = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg>;
-const ThumbDown = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3"></path></svg>;
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../../supabaseClient';
 
 export default function SezioneCommenti({
-  commentsList,
-  newCommentText,
-  setNewCommentText,
-  replyingTo,
-  setReplyingTo,
-  isSubmitting,
-  handlePostComment,
-  handleVote,
-  handleReplyClick,
-  formatCommentDate,
-  commentInputRef,
-  user,
-  openModal
+  commentsList, newCommentText, setNewCommentText, replyingTo, setReplyingTo,
+  isSubmitting, handlePostComment, handleVote, handleReplyClick,
+  formatCommentDate, commentInputRef, user, openModal, 
+  isBanned
 }) {
-  const parentComments = commentsList.filter(c => !c.id_commento_padre);
-  const getReplies = (parentId) => commentsList.filter(c => c.id_commento_padre === parentId);
+  const [reportingCommentId, setReportingCommentId] = useState(null);
+  const [reportText, setReportText] = useState('');
+  const [isReporting, setIsReporting] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
-  const renderComment = (comment, isReply = false) => {
-    const username = comment.utenti?.username || 'Utente';
-    const avatar = `https://api.dicebear.com/7.x/bottts/svg?seed=${username}`;
-    return (
-      <div id={`commento-${comment.id}`} key={comment.id} className={`flex flex-col py-6 border-b border-gray-800/60 transition-colors rounded-md px-2 ${isReply ? 'ml-12 border-l-2 border-[#1f1f1f] pl-6 border-b-0 py-4 mt-2 bg-[#141414]' : ''}`}>
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-4">
-            <Link to={`/utente/${username}`} className="relative group">
-              <img src={avatar} alt={username} className="w-12 h-12 rounded-full bg-gray-800 p-1 border-[2px] border-[#00bfff] group-hover:border-[#ff2020] transition-colors" />
-              <div className="absolute -top-1 -right-1 bg-[#00bfff] text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center shadow-md border-[2px] border-[#111111]">1</div>
-            </Link>
-            <Link to={`/utente/${username}`} className="text-white font-bold text-[15px] hover:text-[#ff2020] transition-colors">{username}</Link>
-          </div>
-          <div className="flex items-center gap-4 text-gray-500 text-[12px] font-semibold">
-            <span>{formatCommentDate(comment.data)}</span>
-            <div className="flex items-center gap-3">
-              <button onClick={() => handleVote(comment.id, 1)} className="flex items-center gap-1 hover:text-green-500 transition-colors"><ThumbUp /> {comment.upvotes > 0 && <span className="text-green-500 bg-[#162a16] px-1.5 rounded-full text-[10px] font-black">{comment.upvotes}</span>}</button>
-              <button onClick={() => handleVote(comment.id, -1)} className="flex items-center gap-1 hover:text-red-500 transition-colors"><ThumbDown />{comment.downvotes > 0 && <span className="text-red-500 bg-[#2a1616] px-1.5 rounded-full text-[10px] font-black">{comment.downvotes}</span>}</button>
+  useEffect(() => {
+    async function checkAdmin() {
+      if (user) {
+        const { data } = await supabase.from('utenti').select('id_ruolo').eq('id_auth', user.id).maybeSingle();
+        if (data && data.id_ruolo === 1) setIsAdmin(true);
+      }
+    }
+    checkAdmin();
+  }, [user]);
+
+  const handleWarn = async (idUtente) => {
+    if(!window.confirm("Assegnare un cartellino giallo a questo utente? (Al secondo cartellino verrà bannato in automatico)")) return;
+    
+    const { data } = await supabase.from('utenti').select('ammonizioni').eq('id', idUtente).single();
+    const current = data?.ammonizioni || 0;
+
+    if (current === 1) {
+      await supabase.from('utenti').update({ ammonizioni: 2, bannato: true }).eq('id', idUtente);
+      await supabase.from('notifiche').insert([{
+        id_utente: idUtente,
+        testo: `⛔ BAN AUTOMATICO: Hai ricevuto il tuo secondo cartellino giallo in un commento. Non puoi più commentare o votare sul sito.`,
+        letta: false
+      }]);
+      alert("L'utente aveva già un cartellino. È stato BANNATO definitivamente.");
+    } else {
+      await supabase.from('utenti').update({ ammonizioni: 1 }).eq('id', idUtente);
+      await supabase.from('notifiche').insert([{
+        id_utente: idUtente,
+        testo: `⚠️ AMMONIZIONE: Hai ricevuto un cartellino giallo dallo staff per un tuo commento. Al prossimo sarai bannato.`,
+        letta: false
+      }]);
+      alert("Utente ammonito con successo.");
+    }
+  };
+
+  const handleBan = async (idUtente) => {
+    if(!window.confirm("Sei sicuro di voler BANNARE DEFINITIVAMENTE questo utente?")) return;
+    await supabase.from('utenti').update({ bannato: true }).eq('id', idUtente);
+    await supabase.from('notifiche').insert([{
+      id_utente: idUtente,
+      testo: `⛔ SEI STATO BANNATO DEFINITIVAMENTE dallo staff. Non puoi più commentare o votare.`,
+      letta: false
+    }]);
+    alert("Utente bannato dal sito.");
+  };
+
+  const handleReportSubmit = async () => {
+    if (!reportText.trim() || !user || !reportingCommentId) return;
+    setIsReporting(true);
+    const { data: userData } = await supabase.from('utenti').select('id').eq('id_auth', user.id).maybeSingle();
+    if (userData) {
+      const payload = { id_segnalatore: userData.id, tipo: 'COMMENTO', id_commento_segnalato: reportingCommentId, motivo: reportText };
+      const { error } = await supabase.from('segnalazioni').insert([payload]);
+      if (!error) { alert("Segnalazione inviata con successo."); setReportText(''); setReportingCommentId(null); }
+    }
+    setIsReporting(false);
+  };
+
+  const getScore = (up, down) => (up || 0) - (down || 0);
+
+  return (
+    <div className="mt-16 border-t border-gray-800 pt-8">
+      <h3 className="text-2xl font-black text-white uppercase tracking-tight mb-8">Commenti ({commentsList.length})</h3>
+
+      {reportingCommentId && (
+        <div className="fixed inset-0 bg-black/90 z-[200] flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-[#1a1a1a] w-full max-w-[600px] border border-gray-800 p-8 relative shadow-2xl">
+            <button onClick={() => setReportingCommentId(null)} className="absolute top-4 right-4 text-gray-500 hover:text-white text-2xl">&times;</button>
+            <h2 className="text-[#ff2020] font-black text-center text-sm tracking-widest uppercase mb-4">Segnala Commento</h2>
+            <textarea value={reportText} onChange={(e) => setReportText(e.target.value)} className="w-full h-40 bg-[#333333] border-none outline-none text-white p-4 resize-none mb-6 font-medium"></textarea>
+            <div className="flex justify-end">
+              <button onClick={handleReportSubmit} disabled={isReporting || !reportText.trim()} className="bg-[#ff4444] text-white font-bold uppercase tracking-widest px-8 py-3 text-sm hover:bg-red-600 disabled:opacity-50">{isReporting ? 'Invio...' : 'Segnala'}</button>
             </div>
           </div>
         </div>
-        <p className="text-gray-300 text-[14px] leading-relaxed mb-4 whitespace-pre-wrap ml-[64px]">{comment.testo.split('\n').map((line, idx) => <React.Fragment key={idx}>{line.split(' ').map((word, i) => word.startsWith('@') ? <span key={i} className="text-[#00bfff] font-bold">{word} </span> : `${word} `)}<br /></React.Fragment>)}</p>
-        <div className="flex items-center justify-between text-[11px] font-bold ml-[64px]">
-          <div className="flex items-center gap-4 text-[#ff2020]"><span onClick={() => handleReplyClick(isReply ? comment.id_commento_padre : comment.id, username)} className="cursor-pointer hover:underline transition-colors font-medium text-[12px]">Rispondi</span><span className="cursor-pointer hover:underline transition-colors font-medium text-[12px]">Permalink</span></div>
-          <span className="text-gray-500 cursor-pointer hover:text-gray-300 transition-colors font-medium text-[12px]">Segnala</span>
-        </div>
-      </div>
-    );
-  };
+      )}
 
-  return (
-    <div className="mt-16 w-full mb-10 font-sans" id="sezione-commenti">
-      <div className="flex items-center justify-between border-b border-gray-800 pb-2 mb-6">
-        <h3 className="text-white font-black text-lg uppercase tracking-tight"><span className="text-[#ff2020]">{commentsList.length}</span> Commenti</h3>
-        <span className="text-[#ff2020] text-xs font-black uppercase tracking-widest cursor-pointer hover:text-white transition-colors">Regolamento</span>
-      </div>
-
-      <div className="bg-[#2a2a2a] p-1 rounded-sm mb-8 flex items-center border border-transparent focus-within:border-[#ff2020] transition-colors relative shadow-lg">
-        <textarea 
-          ref={commentInputRef}
-          placeholder="Lascia un commento... (Premi Invio per inviare)" 
-          className="w-full bg-transparent text-gray-200 p-3 outline-none text-[15px] font-medium placeholder-gray-500 resize-none h-14"
+      <div ref={commentInputRef} className="mb-10">
+        <textarea
           value={newCommentText}
           onChange={(e) => setNewCommentText(e.target.value)}
-          onClick={() => { if (!user) openModal(); }}
-          onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handlePostComment())}
-          disabled={isSubmitting}
+          placeholder={isBanned ? "🚫 IL TUO ACCOUNT È STATO BANNATO. NON PUOI COMMENTARE." : (user ? "Scrivi la tua opinione..." : "Effettua il login per commentare")}
+          disabled={!user || isBanned}
+          className="w-full h-24 bg-[#1a1a1a] border border-gray-800 text-white p-4 outline-none focus:border-[#ff2020] resize-none mb-2 placeholder-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         />
-        {replyingTo && (<div onClick={() => { setReplyingTo(null); setNewCommentText(''); }} className="absolute -top-7 left-0 text-[11px] font-bold text-[#ff2020] hover:text-white cursor-pointer bg-[#1a1a1a] px-2 py-1 rounded-sm border border-[#ff2020]/30 transition-colors">✕ Annulla risposta</div>)}
-        {newCommentText.trim() && user && (<button onClick={handlePostComment} disabled={isSubmitting} className="text-[#ff2020] font-black uppercase text-xs px-6 hover:text-white transition-colors h-full disabled:opacity-50">INVIA</button>)}
+        <div className="flex justify-end">
+          <button onClick={user ? handlePostComment : openModal} disabled={isSubmitting || !user || isBanned || !newCommentText.trim()} className="bg-[#ff2020] text-white font-black uppercase tracking-widest text-xs px-6 py-2.5 hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+            {isBanned ? 'BANNATO' : (isSubmitting ? 'Pubblicazione...' : (user ? 'Invia' : 'Accedi'))}
+          </button>
+        </div>
       </div>
 
-      <div className="flex flex-col">
-        {parentComments.length > 0 ? parentComments.map(parentComment => (
-          <React.Fragment key={parentComment.id}>{renderComment(parentComment, false)}{getReplies(parentComment.id).map(reply => renderComment(reply, true))}</React.Fragment>
-        )) : <p className="text-gray-500 text-center font-bold">Nessun commento. Sii il primo a rompere il ghiaccio!</p>}
+      <div className="flex flex-col gap-0">
+        {commentsList.map(comment => {
+          const score = getScore(comment.upvotes, comment.downvotes);
+          const isPositive = score >= 0;
+
+          return (
+            <div key={comment.id} id={`commento-${comment.id}`} className={`py-6 border-b border-gray-800/60 ${comment.id_commento_padre ? 'ml-8 md:ml-16 pl-4 border-l border-l-gray-800' : ''}`}>
+              <div className="flex items-start justify-between mb-2">
+                <div className="flex items-center gap-4">
+                  <div className="relative">
+                    <div className="w-11 h-11 rounded-full border-[3px] border-gray-700 flex items-center justify-center bg-[#222] text-[#ff2020] font-black shadow-md">
+                      {comment.utenti?.username?.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="absolute -top-1 -right-2 bg-[#00a2ed] text-white text-[9px] font-black w-[18px] h-[18px] flex items-center justify-center rounded-full border-2 border-[#111111]">64</div>
+                  </div>
+                  <div className="flex flex-col">
+                    <div className="flex items-center gap-2">
+                      <span className="text-white font-bold text-[15px]">{comment.utenti?.username}</span>
+                      {comment.utenti?.id_ruolo === 1 && <span className="bg-[#ff2020] text-white text-[9px] px-1 py-0.5 rounded-sm font-black uppercase tracking-widest">Admin</span>}
+                      {comment.utenti?.id_ruolo === 2 && <span className="bg-[#00bfff] text-white text-[9px] px-1 py-0.5 rounded-sm font-black uppercase tracking-widest">Red</span>}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-gray-500 text-xs mr-2">{formatCommentDate(comment.data)}</span>
+                  <button onClick={() => handleVote(comment.id, 1)} className="text-gray-400 hover:text-white transition-colors"><svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg></button>
+                  <div className={`min-w-[22px] h-[22px] px-1.5 flex items-center justify-center rounded-full text-white text-[11px] font-black ${isPositive ? 'bg-[#00b259]' : 'bg-[#ff2020]'}`}>{Math.abs(score)}</div>
+                  <button onClick={() => handleVote(comment.id, -1)} className="text-gray-400 hover:text-white transition-colors"><svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3"></path></svg></button>
+                </div>
+              </div>
+              <div className="ml-[60px] mb-4">
+                <p className="text-gray-300 text-[15px] leading-relaxed">{comment.testo.split(' ').map((word, idx) => word.startsWith('@') ? <span key={idx} className="text-[#00bfff] cursor-pointer mr-1">{word}</span> : <span key={idx} className="mr-1">{word}</span>)}</p>
+              </div>
+              <div className="ml-[60px] flex justify-between items-center text-[13px] font-semibold">
+                <div className="flex gap-4">
+                  <button onClick={() => handleReplyClick(comment.id, comment.utenti?.username)} className="text-[#ff4444] hover:text-red-400 transition-colors">Rispondi</button>
+                  <button className="text-[#ff4444] hover:text-red-400 transition-colors">Permalink</button>
+                </div>
+                <button onClick={() => { if(!user) openModal(); else setReportingCommentId(comment.id); }} className="text-gray-500 hover:text-gray-300 transition-colors">Segnala</button>
+              </div>
+
+              {isAdmin && comment.id_utente && (
+                <div className="ml-[60px] mt-4 pt-3 border-t border-gray-800/80 flex gap-2">
+                  <span className="text-[10px] font-black text-gray-500 uppercase flex items-center mr-2">Admin:</span>
+                  <button onClick={() => handleWarn(comment.id_utente)} className="bg-[#e6c200] hover:bg-yellow-500 text-black px-3 py-1 text-[10px] font-black uppercase tracking-widest rounded-sm transition-colors">Cartellino</button>
+                  <button onClick={() => handleBan(comment.id_utente)} className="bg-red-900 border border-[#ff2020] hover:bg-[#ff2020] text-white px-3 py-1 text-[10px] font-black uppercase tracking-widest rounded-sm transition-colors">Ban Diretto</button>
+                </div>
+              )}
+            </div>
+          );
+        })}
+        {commentsList.length === 0 && <p className="text-gray-500 text-sm italic py-10 text-center">Nessun commento. Sii il primo a scriverne uno!</p>}
       </div>
     </div>
   );

@@ -2,6 +2,9 @@ import React from 'react';
 import ArticleCard from './ArticleCard';
 import { getImg, formatTime, getTag } from '../utils/helpers';
 
+// IMPORTIAMO IL NUOVO WIDGET DEL SONDAGGIO
+import WidgetSondaggio from './home/WidgetSondaggio';
+
 export default function FeedLayout({ articles, showIntro = null }) {
   const topArticles = articles.slice(0, 3);
   const bottomArticles = articles.slice(3, 7);
@@ -63,11 +66,10 @@ export default function FeedLayout({ articles, showIntro = null }) {
             </div>
 
             <div className="lg:col-span-3 flex flex-col gap-6">
-              <div className="bg-[#141414] border border-gray-800">
-                <div className="flex items-center justify-between p-3 border-b border-gray-800"><span className="text-red-500 font-black text-[11px] uppercase tracking-wider">SONDAGGI</span><span className="text-red-500">☑</span></div>
-                <div className="p-3"><img src="https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=400" alt="Zelda" className="w-full h-32 object-cover mb-3" /><h4 className="font-bold text-[13px] mb-4 leading-snug uppercase">Ti è piaciuto il remake di Zelda?</h4><button className="w-full bg-[#ff2020] hover:bg-red-700 text-white font-black py-2.5 uppercase tracking-widest transition-colors text-[13px]">Vota</button></div>
-              </div>
+              {/* QUI ORA C'È IL SONDAGGIO REALE CHE PRENDE I DATI DA SUPABASE */}
+              <WidgetSondaggio />
             </div>
+            
           </div>
         </main>
       )}

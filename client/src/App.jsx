@@ -17,6 +17,7 @@ import PaginaProfilo from './pages/PaginaProfilo';
 import PaginaVideo from './pages/PaginaVideo';
 import PaginaUtente from './pages/PaginaUtente';
 import PaginaScrivi from './pages/PaginaScrivi';
+import PaginaSondaggio from './pages/PaginaSondaggio';
 export default function App() {
   return (
     <AuthProvider>
@@ -39,6 +40,9 @@ export default function App() {
             <Route path="/profilo" element={<PaginaProfilo />} />
             <Route path="/video" element={<PaginaVideo />} />
             <Route path="/utente/:username" element={<PaginaUtente />} />
+            <Route path="/sondaggio/:id" element={<PaginaSondaggio />} />
+            {/* Rotta temporanea per la pagina "Tutti i sondaggi" a cui rimanda il bottone della sidebar */}
+<Route path="/sondaggi" element={<div className="text-white p-20 text-center font-bold text-2xl mt-10">Pagina archivio sondaggi (In lavorazione 🚧)</div>} />
           </Routes>
         </div>
       </Router>
