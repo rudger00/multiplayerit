@@ -34,10 +34,10 @@ export default function Navbar() {
   const [notifiche, setNotifiche] = useState([]);
   const [userDataId, setUserDataId] = useState(null);
   const [userRole, setUserRole] = useState(null); 
+  const [avatarUrl, setAvatarUrl] = useState(''); // <-- STATO AVATAR AGGIUNTO
 
   useEffect(() => {
     async function fetchDropdownData() {
-      // Peschiamo solo articoli pubblicati
       const { data: newsData } = await supabase.from('articoli').select('id, titolo, url_immagine, creato_il').eq('stato', 'PUBLISHED').order('creato_il', { ascending: false }).limit(5);
       if (newsData) setNavNews(newsData);
       
@@ -50,12 +50,21 @@ export default function Navbar() {
 
   useEffect(() => {
     async function fetchUserData() {
-      if (!user) return;
+      if (!user) {
+        setAvatarUrl('');
+        return;
+      }
       const { data: userData } = await supabase.from('utenti').select('id, id_ruolo').eq('id_auth', user.id).maybeSingle();
       if (userData) {
         setUserDataId(userData.id);
         setUserRole(userData.id_ruolo);
         
+        // RECUPERIAMO L'AVATAR DAL DB
+        const { data: profileData } = await supabase.from('profili').select('avatar_url').eq('id_utente', userData.id).maybeSingle();
+        if (profileData && profileData.avatar_url) {
+          setAvatarUrl(profileData.avatar_url);
+        }
+
         const { data: notifData } = await supabase
           .from('notifiche')
           .select('*')
@@ -106,7 +115,6 @@ export default function Navbar() {
   
   const usernameVisualizzato = user?.user_metadata?.username || user?.email?.split('@')[0] || "Utente";
 
-  // Variabili per i ruoli
   const isReporter = userRole === 1 || userRole === 2;
   const isAdmin = userRole === 1;
 
@@ -139,7 +147,6 @@ export default function Navbar() {
       ) : (
         <ul className="hidden lg:flex items-center h-full space-x-1 text-[11px] font-bold tracking-widest text-white ml-auto">
           
-          {/* TASTO AREA ADMIN RISERVATO */}
           {isAdmin && (
             <li className="relative h-full flex items-center">
               <Link to="/admin" onClick={closeAll} className="px-3 text-[#ff2020] hover:text-white transition-colors uppercase h-full flex items-center gap-1.5 border-b-2 border-transparent hover:border-[#ff2020]">
@@ -148,7 +155,6 @@ export default function Navbar() {
             </li>
           )}
 
-          {/* TASTO SCRIVI (VISIBILE AD ADMIN E REDATTORI) */}
           {isReporter && (
             <li className="relative h-full flex items-center">
               <Link to="/scrivi" onClick={closeAll} className="px-3 text-[#fffff] hover:text-white transition-colors uppercase h-full flex items-center gap-1.5 border-b-2 border-transparent hover:border-[#ff2020]">
@@ -215,9 +221,18 @@ export default function Navbar() {
           
           <div className="relative h-full border-l border-gray-700">
             <button onClick={() => user ? setIsProfileOpen(!isProfileOpen) : openModal()} className={`h-full px-4 flex items-center justify-center cursor-pointer transition-colors relative ${isProfileOpen ? 'bg-[#ff2020] text-white' : 'hover:text-white'}`}>
-              <UserIcon />
+              
+              {/* QUI MOSTRA L'AVATAR NELLA NAVBAR SE ESISTE (TIPO GIRAFFA), ALTRIMENTI L'ICONA UTENTE */}
+              {user && avatarUrl ? (
+                <div className="w-7 h-7 rounded-full overflow-hidden border border-gray-500 bg-[#222]">
+                  <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                </div>
+              ) : (
+                <UserIcon />
+              )}
+              
               {notifiche.length > 0 && (
-                <span className={`absolute top-3 right-3 text-[9px] w-3.5 h-3.5 rounded-full flex items-center justify-center font-black ${isProfileOpen ? 'bg-white text-[#ff2020]' : 'bg-[#ff2020] text-white'}`}>
+                <span className={`absolute top-2 right-2 text-[9px] w-3.5 h-3.5 rounded-full flex items-center justify-center font-black ${isProfileOpen ? 'bg-white text-[#ff2020]' : 'bg-[#ff2020] text-white'}`}>
                   {notifiche.length}
                 </span>
               )}
@@ -226,15 +241,20 @@ export default function Navbar() {
             {user && isProfileOpen && (
               <div className="absolute top-14 right-0 w-[340px] bg-[#1a1a1a] shadow-2xl flex flex-col z-50 text-white font-sans border border-gray-800">
                 <div className="flex items-center justify-between p-4 border-b border-gray-800">
-                  <span className="text-[#ff2020] text-[11px] font-black uppercase tracking-widest cursor-pointer hover:text-white transition-colors">Impostazioni</span>
+                  <span onClick={() => { closeAll(); navigate('/impostazioni'); }} className="text-[#ff2020] text-[11px] font-black uppercase tracking-widest cursor-pointer hover:text-white transition-colors">Impostazioni</span>
                   <span onClick={() => { logout(); closeAll(); }} className="text-[#ff2020] text-[11px] font-black uppercase tracking-widest cursor-pointer hover:text-white transition-colors">Logout</span>
                 </div>
 
                 <div onClick={() => { closeAll(); navigate('/profilo'); }} className="p-5 flex items-center justify-between relative cursor-pointer hover:bg-white/5 transition-colors group">
                   <div className="flex items-center gap-4">
                     <div className="relative group-hover:scale-105 transition-transform">
+                      {/* QUI MOSTRA L'AVATAR NEL MENU A TENDINA (GRANDE) */}
                       <div className="w-[60px] h-[60px] rounded-full border-[3px] border-gray-600 bg-[#2a2a2a] flex items-center justify-center overflow-hidden">
-                         <img src={`https://ui-avatars.com/api/?name=${usernameVisualizzato}&background=2a2a2a&color=fff`} className="w-full h-full object-cover" />
+                        {avatarUrl ? (
+                           <img src={avatarUrl} alt="Avatar Menu" className="w-full h-full object-cover" />
+                        ) : (
+                           <img src={`https://ui-avatars.com/api/?name=${usernameVisualizzato}&background=2a2a2a&color=fff`} className="w-full h-full object-cover" alt="Default Avatar" />
+                        )}
                       </div>
                       <div className="absolute -top-1 -right-2 bg-[#00bfff] text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center border-2 border-[#1a1a1a]">6</div>
                     </div>

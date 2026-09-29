@@ -40,7 +40,7 @@ export default function PaginaArticolo() {
   const fetchComments = async () => {
     const { data, error } = await supabase
       .from('commenti')
-      .select(`id, testo, data, id_commento_padre, upvotes, downvotes, id_utente, utenti!id_utente ( username, id_ruolo )`)
+      .select(`id, testo, data, id_commento_padre, upvotes, downvotes, id_utente, utenti!id_utente ( username, id_ruolo, profili ( avatar_url ) )`)
       .eq('id_articolo', parseInt(id))
       .order('data', { ascending: true });
     if (!error && data) setCommentsList(data);

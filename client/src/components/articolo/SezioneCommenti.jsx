@@ -108,15 +108,26 @@ export default function SezioneCommenti({
         {commentsList.map(comment => {
           const score = getScore(comment.upvotes, comment.downvotes);
           const isPositive = score >= 0;
+          
+          // Estrapoliamo l'avatar con controllo di sicurezza (in caso Supabase ritorni array o oggetto)
+          const profiliData = comment.utenti?.profili;
+          const avatarUrl = Array.isArray(profiliData) ? profiliData[0]?.avatar_url : profiliData?.avatar_url;
 
           return (
             <div key={comment.id} id={`commento-${comment.id}`} className={`py-6 border-b border-gray-800/60 ${comment.id_commento_padre ? 'ml-8 md:ml-16 pl-4 border-l border-l-gray-800' : ''}`}>
               <div className="flex items-start justify-between mb-2">
                 <div className="flex items-center gap-4">
                   <div className="relative">
-                    <div className="w-11 h-11 rounded-full border-[3px] border-gray-700 flex items-center justify-center bg-[#222] text-[#ff2020] font-black shadow-md">
-                      {comment.utenti?.username?.charAt(0).toUpperCase()}
+                    
+                    {/* AVATAR RENDERIZZATO QUI */}
+                    <div className="w-11 h-11 rounded-full border-[3px] border-gray-700 flex items-center justify-center bg-[#222] text-[#ff2020] font-black shadow-md overflow-hidden">
+                      {avatarUrl ? (
+                        <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                      ) : (
+                        comment.utenti?.username?.charAt(0).toUpperCase()
+                      )}
                     </div>
+                    
                     <div className="absolute -top-1 -right-2 bg-[#00a2ed] text-white text-[9px] font-black w-[18px] h-[18px] flex items-center justify-center rounded-full border-2 border-[#111111]">64</div>
                   </div>
                   <div className="flex flex-col">

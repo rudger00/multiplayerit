@@ -41,8 +41,9 @@ export default function PaginaScrivi() {
   // --- STATI SONDAGGIO ---
   const [sTitolo, setSTitolo] = useState('');
   const [sDescrizione, setSDescrizione] = useState('');
+  const [sUrlImmagine, setSUrlImmagine] = useState('');
   const [sOpzioni, setSOpzioni] = useState(['', '']); // Minimo 2 opzioni di default
-
+  
   // --- STATI GIOCO MODAL ---
   const [showGameModal, setShowGameModal] = useState(false);
   const [ngSubmitting, setNgSubmitting] = useState(false);
@@ -188,7 +189,7 @@ export default function PaginaScrivi() {
 
     const { data: nuovoSondaggio, error: errSondaggio } = await supabase
       .from('sondaggi')
-      .insert([{ titolo: sTitolo, descrizione: sDescrizione, id_autore: userData.id }])
+      .insert([{ titolo: sTitolo, descrizione: sDescrizione, url_immagine: sUrlImmagine, id_autore: userData.id }])
       .select().single();
 
     if (errSondaggio) {
@@ -573,6 +574,11 @@ export default function PaginaScrivi() {
             <div className="flex flex-col">
               <label className="text-gray-400 font-bold text-xs uppercase mb-2">Descrizione (Opzionale)</label>
               <textarea value={sDescrizione} onChange={(e) => setSDescrizione(e.target.value)} className="bg-[#2a2a2a] text-white p-4 rounded-sm border border-transparent focus:border-[#ff4444] outline-none font-medium resize-none h-24 transition-colors" placeholder="Aggiungi qualche dettaglio in più per far capire meglio il contesto..."></textarea>
+            </div>
+
+            <div className="flex flex-col">
+              <label className="text-gray-400 font-bold text-xs uppercase mb-2">URL Immagine Sondaggio (Homepage)</label>
+              <input type="text" value={sUrlImmagine} onChange={(e) => setSUrlImmagine(e.target.value)} className="bg-[#2a2a2a] text-white p-4 rounded-sm border border-transparent focus:border-[#ff4444] outline-none transition-colors" placeholder="https://..." />
             </div>
 
             <div className="flex flex-col gap-3 mt-4 bg-[#111111] p-6 rounded-sm border border-gray-800">

@@ -2,8 +2,10 @@ import React from 'react';
 import ArticleCard from './ArticleCard';
 import { getImg, formatTime, getTag } from '../utils/helpers';
 
-// IMPORTIAMO IL NUOVO WIDGET DEL SONDAGGIO
+// IMPORT DEI 3 WIDGET DELLA SIDEBAR
 import WidgetSondaggio from './home/WidgetSondaggio';
+import WidgetUltimeRecensioni from './home/WidgetUltimeRecensioni';
+import WidgetGiochiAttesi from './home/WidgetGiochiAttesi';
 
 export default function FeedLayout({ articles, showIntro = null }) {
   const topArticles = articles.slice(0, 3);
@@ -65,9 +67,11 @@ export default function FeedLayout({ articles, showIntro = null }) {
                ))}
             </div>
 
-            <div className="lg:col-span-3 flex flex-col gap-6">
-              {/* QUI ORA C'È IL SONDAGGIO REALE CHE PRENDE I DATI DA SUPABASE */}
+            <div className="lg:col-span-3 flex flex-col gap-0">
+              {/* COMPONENTI SIDEBAR NELL'ORDINE CORRETTO */}
               <WidgetSondaggio />
+              <WidgetUltimeRecensioni />
+              <WidgetGiochiAttesi />
             </div>
             
           </div>

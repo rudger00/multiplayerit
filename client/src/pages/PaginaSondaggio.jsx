@@ -1,24 +1,24 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
-
-// Importiamo il nostro fantastico componente universale per i commenti!
+import { getImg } from '../utils/helpers'; // Ci serve per caricare le immagini delle notizie
 import SezioneCommenti from '../components/articolo/SezioneCommenti';
 
 export default function PaginaSondaggio() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { user, openModal } = useAuth();
   
   const [sondaggio, setSondaggio] = useState(null);
   const [opzioni, setOpzioni] = useState([]);
+  const [notizieSidebar, setNotizieSidebar] = useState([]); // Stato per le notizie
   const [loading, setLoading] = useState(true);
   
   const [haVotato, setHaVotato] = useState(false);
   const [opzioneSelezionata, setOpzioneSelezionata] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // --- STATI PER I COMMENTI E BAN ---
   const [isBanned, setIsBanned] = useState(false);
   const [commentsList, setCommentsList] = useState([]);
   const [newCommentText, setNewCommentText] = useState('');
@@ -28,15 +28,17 @@ export default function PaginaSondaggio() {
   const fetchComments = async () => {
     const { data, error } = await supabase
       .from('commenti')
-      .select(`id, testo, data, id_commento_padre, upvotes, downvotes, id_utente, utenti!id_utente ( username, id_ruolo )`)
-      .eq('id_sondaggio', parseInt(id)) // Peschiamo i commenti di QUESTO sondaggio
+      .select(`id, testo, data, id_commento_padre, upvotes, downvotes, id_utente, utenti!id_utente ( username, id_ruolo, profili ( avatar_url ) )`)
+      .eq('id_sondaggio', parseInt(id))
       .order('data', { ascending: true });
     if (!error && data) setCommentsList(data);
   };
 
   useEffect(() => {
-    async function fetchSondaggio() {
+    async function fetchDatiSondaggio() {
       setLoading(true);
+      
+      // 1. Fetch Sondaggio
       const { data: sData } = await supabase.from('sondaggi').select(`*, utenti!id_autore(username)`).eq('id', parseInt(id)).maybeSingle();
 
       if (sData) {
@@ -47,20 +49,23 @@ export default function PaginaSondaggio() {
         if (user) {
           const { data: userData } = await supabase.from('utenti').select('id, bannato').eq('id_auth', user.id).maybeSingle();
           if (userData) {
-            setIsBanned(userData.bannato); // Salviamo lo stato BAN per i commenti
+            setIsBanned(userData.bannato);
             const { data: vData } = await supabase.from('sondaggi_voti').select('*').eq('id_sondaggio', sData.id).eq('id_utente', userData.id).maybeSingle();
             if (vData) setHaVotato(true);
           }
         }
-        // Carichiamo i commenti alla fine
         await fetchComments();
       }
+
+      // 2. Fetch Notizie Più Lette (Ultimi 4 articoli pubblicati)
+      const { data: nData } = await supabase.from('articoli').select('id, titolo, url_immagine').eq('stato', 'PUBLISHED').order('creato_il', { ascending: false }).limit(4);
+      if (nData) setNotizieSidebar(nData);
+
       setLoading(false);
     }
-    fetchSondaggio();
+    fetchDatiSondaggio();
   }, [id, user]);
 
-  // Gestione click sul commento con l'ancora
   useEffect(() => {
     if (commentsList.length > 0 && window.location.hash) {
       const element = document.querySelector(window.location.hash);
@@ -74,12 +79,10 @@ export default function PaginaSondaggio() {
     }
   }, [commentsList]);
 
-  // --- LOGICA VOTO SONDAGGIO ---
   const handleVota = async () => {
     if (!user) { openModal(); return; }
     if (!opzioneSelezionata) { alert("Seleziona un'opzione prima di votare!"); return; }
     setIsSubmitting(true);
-
     if (isBanned) { alert("Il tuo account è bannato."); setIsSubmitting(false); return; }
 
     const { data: userData } = await supabase.from('utenti').select('id').eq('id_auth', user.id).maybeSingle();
@@ -95,24 +98,19 @@ export default function PaginaSondaggio() {
     setIsSubmitting(false);
   };
 
-  // --- LOGICA COMMENTI ---
   const handlePostComment = async () => {
-    if (isBanned) { alert("Il tuo account è bannato. Non puoi commentare."); return; }
+    if (isBanned) { alert("Il tuo account è bannato."); return; }
     if (!newCommentText.trim() || !user) { if(!user) openModal(); return; }
     setIsSubmitting(true);
     
     const { data: userData } = await supabase.from('utenti').select('id, username').eq('id_auth', user.id).maybeSingle();
     if (userData) {
       const { data: newDbComment, error } = await supabase.from('commenti').insert([{ 
-        testo: newCommentText, 
-        id_sondaggio: parseInt(id), // Colleghiamo il commento al SONDAGGIO
-        id_utente: userData.id, 
-        id_commento_padre: replyingTo, 
-        data: new Date().toISOString() 
-      }]).select().single();
+        testo: newCommentText, id_sondaggio: parseInt(id), id_utente: userData.id, id_commento_padre: replyingTo, data: new Date().toISOString() 
+      }]).select('id').single();
 
       if (!error) { 
-        if (replyingTo) {
+        if (replyingTo && newDbComment) {
           const { data: parentComment } = await supabase.from('commenti').select('id_utente').eq('id', replyingTo).maybeSingle();
           if (parentComment && parentComment.id_utente !== userData.id) {
             await supabase.from('notifiche').insert([{ id_utente: parentComment.id_utente, testo: `${userData.username} ha risposto al tuo commento nel sondaggio "${sondaggio.titolo}"`, link: `/sondaggio/${id}#commento-${newDbComment.id}`, letta: false }]);
@@ -124,25 +122,21 @@ export default function PaginaSondaggio() {
     setIsSubmitting(false);
   };
 
-  const handleVote = async (commentId, voteValue) => {
-    if (isBanned) { alert("Il tuo account è bannato. Non puoi valutare i commenti."); return; }
-    if (!user) { openModal(); return; }
+  const handleVote = async (commentId, voteValue) => { /* Stessa logica standard */
+    if (isBanned) return; if (!user) { openModal(); return; }
     const { data: userData } = await supabase.from('utenti').select('id').eq('id_auth', user.id).maybeSingle();
     if (userData) {
       await supabase.from('commenti_voti').upsert({ id_commento: commentId, id_utente: userData.id, voto: voteValue }, { onConflict: 'id_commento, id_utente' });
       const { data: allVotes } = await supabase.from('commenti_voti').select('voto').eq('id_commento', commentId);
-      let newUpvotes = 0, newDownvotes = 0;
-      allVotes?.forEach(v => { if (v.voto === 1) newUpvotes++; if (v.voto === -1) newDownvotes++; });
-      await supabase.from('commenti').update({ upvotes: newUpvotes, downvotes: newDownvotes }).eq('id', commentId);
+      let up = 0, down = 0; allVotes?.forEach(v => { if(v.voto === 1) up++; if(v.voto === -1) down++; });
+      await supabase.from('commenti').update({ upvotes: up, downvotes: down }).eq('id', commentId);
       fetchComments();
     }
   };
 
   const handleReplyClick = (commentId, username) => {
     if (!user) { openModal(); return; }
-    setReplyingTo(commentId);
-    setNewCommentText(`@${username} `);
-    commentInputRef.current?.focus();
+    setReplyingTo(commentId); setNewCommentText(`@${username} `); commentInputRef.current?.focus();
     window.scrollTo({ top: commentInputRef.current.offsetTop - 100, behavior: 'smooth' });
   };
 
@@ -166,8 +160,9 @@ export default function PaginaSondaggio() {
         <div className="lg:w-[70%] flex flex-col">
           <div className="bg-[#1a1a1a] p-6 md:p-10 border border-gray-800 rounded-sm shadow-xl relative mb-12">
             
-            <div className="absolute top-6 right-6 w-10 h-10 bg-[#ff4444] rounded-full flex items-center justify-center text-white text-[12px] font-black shadow-lg cursor-pointer">
-              {commentsList.length}
+            {/* Badge Commenti stile Fumetto */}
+            <div className="absolute top-6 right-6 w-10 h-10 bg-[#ff4444] rounded-full rounded-bl-none flex items-center justify-center text-white text-[14px] font-black shadow-lg transform rotate-12" onClick={() => window.scrollTo(0, document.body.scrollHeight)} style={{cursor:'pointer'}}>
+              <div className="-rotate-12">{commentsList.length}</div>
             </div>
 
             <h1 className="text-3xl md:text-5xl font-black text-white leading-tight tracking-tight mb-4 pr-12">{sondaggio.titolo}</h1>
@@ -187,16 +182,11 @@ export default function PaginaSondaggio() {
             <div className="flex flex-col gap-5 border-b border-gray-800 pb-8 mb-6">
               {opzioni.map((opz) => {
                 const percentuale = totaliVoti > 0 ? Math.round((opz.voti / totaliVoti) * 100) : 0;
-                
                 return (
                   <div key={opz.id} className="relative">
                     {!haVotato ? (
                       <label className="flex items-center gap-3 cursor-pointer group">
-                        <input 
-                          type="radio" name="sondaggio_opzioni" value={opz.id}
-                          onChange={() => setOpzioneSelezionata(opz.id)}
-                          className="w-4 h-4 accent-[#ff4444] bg-transparent border-gray-500 cursor-pointer" 
-                        />
+                        <input type="radio" name="sondaggio_opzioni" value={opz.id} onChange={() => setOpzioneSelezionata(opz.id)} className="w-4 h-4 accent-[#ff4444] bg-transparent border-gray-500 cursor-pointer" />
                         <span className="text-white font-bold text-lg group-hover:text-[#ff4444] transition-colors">{opz.testo}</span>
                       </label>
                     ) : (
@@ -205,7 +195,7 @@ export default function PaginaSondaggio() {
                           <span>{opz.testo}</span>
                           <span>{percentuale}% ({opz.voti} voti)</span>
                         </div>
-                        <div className="w-full bg-[#333] h-3 rounded-full overflow-hidden">
+                        <div className="w-full bg-[#333] h-4 rounded-sm overflow-hidden">
                           <div className="bg-[#e6c200] h-full" style={{ width: `${percentuale}%` }}></div>
                         </div>
                       </div>
@@ -218,39 +208,24 @@ export default function PaginaSondaggio() {
             <div className="flex justify-between items-center">
               <span className="text-gray-400 text-[13px] font-semibold">Voti totali: {totaliVoti}</span>
               {!haVotato && (
-                <button 
-                  onClick={handleVota} disabled={isSubmitting || !opzioneSelezionata}
-                  className="bg-[#ff4444] text-white font-black uppercase tracking-widest px-10 py-3 rounded-sm hover:bg-red-600 transition-colors disabled:opacity-50"
-                >
+                <button onClick={handleVota} disabled={isSubmitting || !opzioneSelezionata} className="bg-[#ff4444] text-white font-black uppercase tracking-widest px-10 py-3 rounded-sm hover:bg-red-600 transition-colors disabled:opacity-50">
                   {isSubmitting ? 'VOTO...' : 'VOTA'}
                 </button>
               )}
             </div>
           </div>
 
-          {/* COMPONENTE SEZIONE COMMENTI */}
           <div className="-mt-8">
             <SezioneCommenti 
-              commentsList={commentsList} 
-              newCommentText={newCommentText} 
-              setNewCommentText={setNewCommentText} 
-              replyingTo={replyingTo} 
-              setReplyingTo={setReplyingTo} 
-              isSubmitting={isSubmitting} 
-              handlePostComment={handlePostComment} 
-              handleVote={handleVote} 
-              handleReplyClick={handleReplyClick} 
-              formatCommentDate={formatCommentDate} 
-              commentInputRef={commentInputRef} 
-              user={user} 
-              openModal={openModal} 
-              isBanned={isBanned} 
+              commentsList={commentsList} newCommentText={newCommentText} setNewCommentText={setNewCommentText} 
+              replyingTo={replyingTo} setReplyingTo={setReplyingTo} isSubmitting={isSubmitting} 
+              handlePostComment={handlePostComment} handleVote={handleVote} handleReplyClick={handleReplyClick} 
+              formatCommentDate={formatCommentDate} commentInputRef={commentInputRef} user={user} openModal={openModal} isBanned={isBanned} 
             />
           </div>
-
         </div>
 
-        {/* SIDEBAR LATERALE */}
+        {/* SIDEBAR LATERALE (Notizie Vere dal DB) */}
         <div className="lg:w-[30%] flex flex-col gap-6">
           <Link to="/sondaggi" className="w-full bg-[#ff4444] hover:bg-red-600 text-white font-black text-center text-[15px] tracking-widest uppercase py-4 rounded-sm shadow-md transition-colors">
             VAI A TUTTI I SONDAGGI
@@ -259,12 +234,15 @@ export default function PaginaSondaggio() {
           <div className="bg-[#1a1a1a] border border-gray-800 p-5 mt-4">
              <h4 className="text-[#ff4444] font-black text-sm uppercase tracking-widest mb-4">LE NOTIZIE PIÙ LETTE</h4>
              <div className="flex flex-col gap-4">
-               {[1, 2, 3].map(i => (
-                 <div key={i} className="flex gap-3 border-b border-gray-800 pb-3 last:border-0 cursor-pointer group">
-                   <div className="w-16 h-16 bg-gray-700 shrink-0"></div>
-                   <p className="text-gray-300 text-xs font-bold leading-snug group-hover:text-[#ff4444] transition-colors">Notizia simulata numero {i} molto interessante per mantenere il layout intatto.</p>
-                 </div>
+               {notizieSidebar.map(news => (
+                 <Link to={`/articolo/${news.id}`} key={news.id} className="flex gap-3 border-b border-gray-800 pb-3 last:border-0 cursor-pointer group">
+                   <div className="w-16 h-16 bg-gray-700 shrink-0 overflow-hidden">
+                     {news.url_immagine && <img src={getImg(news.url_immagine)} alt={news.titolo} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />}
+                   </div>
+                   <p className="text-gray-300 text-xs font-bold leading-snug group-hover:text-[#ff4444] transition-colors">{news.titolo}</p>
+                 </Link>
                ))}
+               {notizieSidebar.length === 0 && <p className="text-gray-500 text-xs">Nessuna notizia disponibile.</p>}
              </div>
           </div>
         </div>
