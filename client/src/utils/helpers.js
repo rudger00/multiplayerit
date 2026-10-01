@@ -1,12 +1,12 @@
 export const PLATFORMS = {
-  'pc': { id: 1, name: 'PC', desc: 'Tutto su PC: giochi, notizie, articoli, nuove uscite, recensioni, video e approfondimenti sul mondo del gaming su computer.' },
-  'ps5': { id: 2, name: 'PLAYSTATION 5', desc: 'Tutto su PlayStation 5, la console di nona generazione di casa Sony: giochi, notizie, articoli, nuove uscite, recensioni, video e offerte.' },
-  'ps4': { id: 3, name: 'PLAYSTATION 4', desc: 'Tutto su PlayStation 4: giochi, notizie, articoli, nuove uscite e recensioni per la console Sony.' },
-  'xbox-series-x-s': { id: 4, name: 'XBOX SERIES X/S', desc: 'Tutto su Xbox Series X e Series S, le console next-gen di Microsoft: giochi, notizie, Xbox Game Pass e recensioni.' },
-  'xbox-one': { id: 5, name: 'XBOX ONE', desc: 'Tutto su Xbox One, la console di ottava generazione di Microsoft: giochi, notizie, articoli, nuove uscite, recensioni, video, offerte.' },
-  'nintendo-switch': { id: 6, name: 'NINTENDO SWITCH', desc: 'Tutto su Nintendo Switch, la console ibrida di Nintendo: giochi, notizie, esclusive di Mario e Zelda, recensioni e video.' },
-  'ios': { id: 7, name: 'IOS', desc: 'Tutto sul gaming per ecosistema Apple iOS: iPhone, iPad e Apple Arcade.' },
-  'android': { id: 8, name: 'ANDROID', desc: 'Tutto sul gaming per ecosistema Android: smartphone, tablet e nuove uscite mobile.' }
+  'pc': { id: 1, name: 'PC', color: 'bg-gray-500' },
+  'ps5': { id: 2, name: 'PlayStation 5', color: 'bg-blue-600' },
+  'ps4': { id: 3, name: 'PlayStation 4', color: 'bg-blue-500' },
+  'xbox-series-x': { id: 4, name: 'Xbox Series X/S', color: 'bg-green-600' },
+  'xbox-one': { id: 5, name: 'Xbox One', color: 'bg-green-500' },
+  'switch': { id: 6, name: 'Nintendo Switch', color: 'bg-red-600' },
+  'ios': { id: 7, name: 'iOS', color: 'bg-gray-400' },
+  'android': { id: 8, name: 'ANDROID', color: 'bg-green-400' } 
 };
 
 export const FALLBACK_IMG = "https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&q=80&w=800";

@@ -16,9 +16,9 @@ export default function PaginaScrivi() {
   
   const [categorie, setCategorie] = useState([]);
   const [giochi, setGiochi] = useState([]);
+  const [piattaforme, setPiattaforme] = useState([]); 
   const [authorName, setAuthorName] = useState('Redazione');
   
-  // TIPO DI CONTENUTO: articolo o sondaggio
   const [contentType, setContentType] = useState('articolo');
   const [viewMode, setViewMode] = useState('editor');
   
@@ -29,6 +29,7 @@ export default function PaginaScrivi() {
   const [urlVideo, setUrlVideo] = useState('');
   const [idCategoria, setIdCategoria] = useState('');
   const [idGioco, setIdGioco] = useState('');
+  const [piattaformeSelezionate, setPiattaformeSelezionate] = useState([]); // Array delle piattaforme scelte
   const [contenuto, setContenuto] = useState('');
   
   const [votoRedazione, setVotoRedazione] = useState('');
@@ -42,7 +43,7 @@ export default function PaginaScrivi() {
   const [sTitolo, setSTitolo] = useState('');
   const [sDescrizione, setSDescrizione] = useState('');
   const [sUrlImmagine, setSUrlImmagine] = useState('');
-  const [sOpzioni, setSOpzioni] = useState(['', '']); // Minimo 2 opzioni di default
+  const [sOpzioni, setSOpzioni] = useState(['', '']); 
   
   // --- STATI GIOCO MODAL ---
   const [showGameModal, setShowGameModal] = useState(false);
@@ -76,14 +77,12 @@ export default function PaginaScrivi() {
       
       const { data: userData } = await supabase.from('utenti').select('id_ruolo, username, bannato').eq('id_auth', user.id).maybeSingle();
       
-      // 1. CONTROLLO BAN
       if (userData?.bannato) {
         alert("⛔ IL TUO ACCOUNT È STATO BANNATO.\nNon hai più i permessi per accedere alla Redazione e scrivere contenuti.");
         navigate('/'); 
         return;
       }
 
-      // 2. CONTROLLO RUOLO (SOLO ADMIN E REDATTORI ACCEDONO A QUESTA PAGINA)
       if (!userData || (userData.id_ruolo !== 1 && userData.id_ruolo !== 2)) { 
         navigate('/'); 
         return; 
@@ -91,18 +90,42 @@ export default function PaginaScrivi() {
 
       setAuthorName(userData.username || 'Redazione');
 
-      const { data: catData, error: catError } = await supabase.from('categorie').select('*').order('id');
-      if (catError) console.error("Errore fetch categorie:", catError);
+      const { data: catData } = await supabase.from('categorie').select('*').order('id');
       if (catData) setCategorie(catData);
 
-      const { data: giochiData, error: giochiError } = await supabase.from('giochi').select('id, titolo').order('titolo');
-      if (giochiError) console.error("Errore fetch giochi:", giochiError);
+      const { data: giochiData } = await supabase.from('giochi').select('id, titolo').order('titolo');
       if (giochiData) setGiochi(giochiData);
+
+      // Carica Piattaforme (Preveniamo errori se la colonna non si chiama 'nome')
+      const { data: platData } = await supabase.from('piattaforme').select('*');
+      if (platData) {
+        // Ordiniamo alfabeticamente a prescindere dal nome esatto della colonna
+        platData.sort((a, b) => {
+          const nomeA = a.nome || a.titolo || a.nome_piattaforma || '';
+          const nomeB = b.nome || b.titolo || b.nome_piattaforma || '';
+          return nomeA.localeCompare(nomeB);
+        });
+        setPiattaforme(platData);
+      }
 
       setLoading(false);
     }
     checkAuthAndFetchData();
   }, [user, navigate]);
+
+  // FUNZIONE SELEZIONE MULTIPLA PIATTAFORME
+  const handleTogglePiattaforma = (e, platId) => {
+    e.preventDefault(); // Impedisce invii accidentali del form
+    if (!platId) return;
+
+    setPiattaformeSelezionate(prev => {
+      if (prev.includes(platId)) {
+        return prev.filter(id => id !== platId); // Rimuovi se c'è
+      } else {
+        return [...prev, platId]; // Aggiungi se non c'è
+      }
+    });
+  };
 
   // --- SALVATAGGIO ARTICOLO ---
   const handleArticoloSubmit = async (e) => {
@@ -150,20 +173,39 @@ export default function PaginaScrivi() {
       newArticle.versione_testata = versioneTestata;
     }
 
-    const { error } = await supabase.from('articoli').insert([newArticle]).select();
+    // Inserisci l'articolo principale
+    const { data, error } = await supabase.from('articoli').insert([newArticle]).select();
 
     if (error) {
       console.error("Errore salvataggio:", error);
       alert("Errore salvataggio: " + error.message);
     } else {
+      
+      // Inserisci i collegamenti alle piattaforme multiple
+      if (data && data.length > 0 && piattaformeSelezionate.length > 0) {
+        const nuovoArticoloId = data[0].id;
+        
+        const relazioni = piattaformeSelezionate.map(platId => ({
+          id_articolo: nuovoArticoloId,   // Nomi colonne corretti per Supabase
+          id_piattaforma: platId          
+        }));
+        
+        const { error: platError } = await supabase.from('articoli_piattaforme').insert(relazioni);
+        if (platError) {
+           console.error("Errore piattaforme:", platError);
+        }
+      }
+
       if (statoArticolo === 'PUBLISHED') {
         setSuccessMsg("Articolo pubblicato online con successo!");
       } else {
         setSuccessMsg("Articolo inviato in revisione (DRAFT)! Sarà visibile non appena un Amministratore lo approverà.");
       }
       
+      // Svuota tutti i campi
       setTitolo(''); setSommario(''); setUrlImmagine(''); setIdCategoria(''); setIdGioco(''); setUrlVideo('');
       setContenuto(''); setVotoRedazione(''); setPro(''); setContro(''); setTestoConclusioni(''); setVersioneTestata('');
+      setPiattaformeSelezionate([]); 
       setViewMode('editor');
       window.scrollTo(0, 0);
     }
@@ -250,7 +292,7 @@ export default function PaginaScrivi() {
   return (
     <div className="bg-[#111111] min-h-screen pb-20 font-sans relative">
       
-      {/* MODALE NUOVO GIOCO (Lasciato Intatto) */}
+      {/* MODALE NUOVO GIOCO */}
       {showGameModal && (
         <div className="fixed inset-0 bg-black/90 z-[100] flex items-center justify-center p-4">
           <div className="bg-[#161616] border-t-4 border-[#ff2020] rounded-sm shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto p-8 relative">
@@ -322,7 +364,6 @@ export default function PaginaScrivi() {
             <h1 className="text-white text-3xl font-black uppercase tracking-tight">Redazione <span className="text-[#ff2020]">CMS</span></h1>
             <p className="text-gray-400 text-sm font-semibold mt-1">Gestione contenuti e pubblicazione</p>
             
-            {/* TENDINA SCELTA TIPO CONTENUTO */}
             <div className="mt-4 flex items-center gap-3">
               <span className="text-white text-xs font-bold uppercase tracking-widest">Cosa vuoi creare?</span>
               <select 
@@ -339,10 +380,10 @@ export default function PaginaScrivi() {
           {contentType === 'articolo' && (
             <div className="flex gap-2 mb-[-1px]">
               <button onClick={() => setViewMode('editor')} className={`px-6 py-3 font-black uppercase text-sm tracking-widest transition-colors border-t-2 border-l-2 border-r-2 rounded-t-sm ${viewMode === 'editor' ? 'bg-[#111111] border-[#ff2020] text-[#ff2020]' : 'bg-[#1a1a1a] border-gray-800 text-gray-500 hover:text-white'}`}>
-                ✏️ Editor
+                ✏️️ Editor
               </button>
               <button onClick={() => setViewMode('preview')} className={`px-6 py-3 font-black uppercase text-sm tracking-widest transition-colors border-t-2 border-l-2 border-r-2 rounded-t-sm ${viewMode === 'preview' ? 'bg-[#111111] border-[#ff2020] text-[#ff2020]' : 'bg-[#1a1a1a] border-gray-800 text-gray-500 hover:text-white'}`}>
-                👁️ Anteprima
+                👁 Anteprima
               </button>
             </div>
           )}
@@ -406,6 +447,41 @@ export default function PaginaScrivi() {
                       </select>
                     </div>
                   </div>
+
+                  {/* UI PIATTAFORME MULTIPLE */}
+                  <div className="flex flex-col border-t border-gray-800 pt-6 mt-2">
+                    <label className="text-white font-black text-[13px] uppercase mb-4 tracking-widest">
+                      Piattaforme di Riferimento <span className="text-gray-500 font-normal normal-case tracking-normal">(opzionale, seleziona una o più)</span>
+                    </label>
+                    <div className="flex flex-wrap gap-3">
+                      {piattaforme.length > 0 ? (
+                        piattaforme.map(plat => {
+                          const platId = plat.id; 
+                          const platNome = plat.nome || plat.titolo || 'Ignoto';
+                          const isSelected = piattaformeSelezionate.includes(platId);
+
+                          return (
+                            <button
+                              key={platId}
+                              type="button" 
+                              onClick={(e) => handleTogglePiattaforma(e, platId)}
+                              className={`px-4 py-2 border text-[12px] font-black uppercase tracking-widest transition-all rounded-sm flex items-center gap-2 shadow-sm ${
+                                isSelected
+                                  ? 'bg-[#ff2020] border-[#ff2020] text-white shadow-[0_0_15px_rgba(255,32,32,0.4)] scale-105'
+                                  : 'bg-[#2a2a2a] border-gray-700 text-gray-400 hover:border-gray-500 hover:text-white'
+                              }`}
+                            >
+                              {isSelected && <span className="text-white font-black">✓</span>}
+                              {platNome}
+                            </button>
+                          );
+                        })
+                      ) : (
+                        <span className="text-gray-500 text-sm italic">Nessuna piattaforma caricata. Controlla il database.</span>
+                      )}
+                    </div>
+                  </div>
+
                 </div>
 
                 {isRecensione && (

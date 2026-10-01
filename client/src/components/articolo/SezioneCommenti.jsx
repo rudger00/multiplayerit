@@ -11,15 +11,24 @@ export default function SezioneCommenti({
   const [reportText, setReportText] = useState('');
   const [isReporting, setIsReporting] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  
+  // STATO PER LA BLACKLIST
+  const [myBlacklist, setMyBlacklist] = useState([]);
 
   useEffect(() => {
-    async function checkAdmin() {
+    async function checkAdminAndBlacklist() {
       if (user) {
-        const { data } = await supabase.from('utenti').select('id_ruolo').eq('id_auth', user.id).maybeSingle();
-        if (data && data.id_ruolo === 1) setIsAdmin(true);
+        const { data: uData } = await supabase.from('utenti').select('id, id_ruolo').eq('id_auth', user.id).maybeSingle();
+        if (uData) {
+          if (uData.id_ruolo === 1) setIsAdmin(true);
+          
+          // Peschiamo la blacklist
+          const { data: bl } = await supabase.from('blacklist').select('id_bloccato').eq('id_utente', uData.id);
+          if (bl) setMyBlacklist(bl.map(b => b.id_bloccato));
+        }
       }
     }
-    checkAdmin();
+    checkAdminAndBlacklist();
   }, [user]);
 
   const handleWarn = async (idUtente) => {
@@ -70,6 +79,16 @@ export default function SezioneCommenti({
     setIsReporting(false);
   };
 
+  const handleBlockUser = async (idDaBloccare, usernameDaBloccare) => {
+    if(!window.confirm(`Vuoi aggiungere ${usernameDaBloccare} alla tua Blacklist? I suoi commenti verranno oscurati.`)) return;
+    const { data: uData } = await supabase.from('utenti').select('id').eq('id_auth', user.id).maybeSingle();
+    if (uData) {
+      await supabase.from('blacklist').insert([{ id_utente: uData.id, id_bloccato: idDaBloccare }]);
+      setMyBlacklist([...myBlacklist, idDaBloccare]);
+      alert("Utente bloccato con successo!");
+    }
+  };
+
   const getScore = (up, down) => (up || 0) - (down || 0);
 
   return (
@@ -109,30 +128,42 @@ export default function SezioneCommenti({
           const score = getScore(comment.upvotes, comment.downvotes);
           const isPositive = score >= 0;
           
-          // Estrapoliamo l'avatar con controllo di sicurezza (in caso Supabase ritorni array o oggetto)
           const profiliData = comment.utenti?.profili;
           const avatarUrl = Array.isArray(profiliData) ? profiliData[0]?.avatar_url : profiliData?.avatar_url;
+
+          // CONTROLLO BLACKLIST
+          const isBlocked = myBlacklist.includes(comment.id_utente);
+
+          if (isBlocked) {
+            return (
+              <div key={comment.id} className="py-4 border-b border-gray-800/40 bg-[#161616] flex items-center justify-between px-4 opacity-50 mb-2">
+                <span className="text-gray-500 text-xs font-bold uppercase tracking-widest">🚫 Commento nascosto (Utente bloccato)</span>
+              </div>
+            );
+          }
 
           return (
             <div key={comment.id} id={`commento-${comment.id}`} className={`py-6 border-b border-gray-800/60 ${comment.id_commento_padre ? 'ml-8 md:ml-16 pl-4 border-l border-l-gray-800' : ''}`}>
               <div className="flex items-start justify-between mb-2">
                 <div className="flex items-center gap-4">
                   <div className="relative">
-                    
-                    {/* AVATAR RENDERIZZATO QUI */}
-                    <div className="w-11 h-11 rounded-full border-[3px] border-gray-700 flex items-center justify-center bg-[#222] text-[#ff2020] font-black shadow-md overflow-hidden">
-                      {avatarUrl ? (
-                        <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
-                      ) : (
-                        comment.utenti?.username?.charAt(0).toUpperCase()
-                      )}
-                    </div>
-                    
+                    <a href={`/utente/${comment.utenti?.username}`}>
+                      <div className="w-11 h-11 rounded-full border-[3px] border-gray-700 flex items-center justify-center bg-[#222] text-[#ff2020] font-black shadow-md overflow-hidden cursor-pointer">
+                        {avatarUrl ? (
+                          <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                        ) : (
+                          comment.utenti?.username?.charAt(0).toUpperCase()
+                        )}
+                      </div>
+                    </a>
                     <div className="absolute -top-1 -right-2 bg-[#00a2ed] text-white text-[9px] font-black w-[18px] h-[18px] flex items-center justify-center rounded-full border-2 border-[#111111]">64</div>
                   </div>
                   <div className="flex flex-col">
                     <div className="flex items-center gap-2">
-                      <span className="text-white font-bold text-[15px]">{comment.utenti?.username}</span>
+                      {/* LINK AL PROFILO */}
+                      <a href={`/utente/${comment.utenti?.username}`} className="text-white font-bold text-[15px] hover:text-[#ff2020] transition-colors cursor-pointer">
+                        {comment.utenti?.username}
+                      </a>
                       {comment.utenti?.id_ruolo === 1 && <span className="bg-[#ff2020] text-white text-[9px] px-1 py-0.5 rounded-sm font-black uppercase tracking-widest">Admin</span>}
                       {comment.utenti?.id_ruolo === 2 && <span className="bg-[#00bfff] text-white text-[9px] px-1 py-0.5 rounded-sm font-black uppercase tracking-widest">Red</span>}
                     </div>
@@ -153,7 +184,12 @@ export default function SezioneCommenti({
                   <button onClick={() => handleReplyClick(comment.id, comment.utenti?.username)} className="text-[#ff4444] hover:text-red-400 transition-colors">Rispondi</button>
                   <button className="text-[#ff4444] hover:text-red-400 transition-colors">Permalink</button>
                 </div>
-                <button onClick={() => { if(!user) openModal(); else setReportingCommentId(comment.id); }} className="text-gray-500 hover:text-gray-300 transition-colors">Segnala</button>
+                
+                {/* BOTTONI BLOCCA E SEGNALA */}
+                <div className="flex gap-4">
+                  <button onClick={() => { if(!user) openModal(); else handleBlockUser(comment.id_utente, comment.utenti?.username); }} className="text-gray-500 hover:text-white transition-colors flex items-center gap-1">🔒 Blocca</button>
+                  <button onClick={() => { if(!user) openModal(); else setReportingCommentId(comment.id); }} className="text-gray-500 hover:text-white transition-colors">Segnala</button>
+                </div>
               </div>
 
               {isAdmin && comment.id_utente && (

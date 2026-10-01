@@ -15,15 +15,52 @@ export default function PaginaPiattaforma() {
     async function fetchPlatformArticles() {
       if (!platformInfo) return;
       setLoading(true);
-      const { data, error } = await supabase
-        .from('articoli')
-        .select(`*, categorie ( nome ), articoli_piattaforme!inner(id_piattaforma)`)
-        .eq('articoli_piattaforme.id_piattaforma', platformInfo.id)
-        .order('creato_il', { ascending: false });
-        
-      if (!error && data) setArticles(data);
+
+      try {
+        console.log(`Sto cercando gli articoli per la piattaforma: ${platformInfo.name} (ID: ${platformInfo.id})`);
+
+        // STEP 1: Cerchiamo gli ID degli articoli nella tabella ponte
+        const { data: relazioni, error: errRelazioni } = await supabase
+          .from('articoli_piattaforme')
+          .select('id_articolo')
+          .eq('id_piattaforma', platformInfo.id);
+
+        if (errRelazioni) {
+          console.error("Errore Step 1 (Relazioni):", errRelazioni);
+          setLoading(false);
+          return;
+        }
+
+        console.log("Relazioni trovate:", relazioni);
+
+        if (!relazioni || relazioni.length === 0) {
+          setArticles([]);
+          setLoading(false);
+          return;
+        }
+
+        const articleIds = relazioni.map(rel => rel.id_articolo);
+
+        // STEP 2: Scarichiamo direttamente gli articoli SENZA join ambigui
+        const { data: articoliData, error: errArticoli } = await supabase
+          .from('articoli')
+          .select('*')
+          .in('id', articleIds)
+          .order('creato_il', { ascending: false });
+
+        if (errArticoli) {
+          console.error("Errore Step 2 (Articoli):", errArticoli);
+        } else if (articoliData) {
+          setArticles(articoliData);
+        }
+
+      } catch (err) {
+        console.error("Errore imprevisto:", err);
+      }
+
       setLoading(false);
     }
+    
     fetchPlatformArticles();
   }, [slug, platformInfo]);
 

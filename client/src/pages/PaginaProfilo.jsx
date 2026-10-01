@@ -9,6 +9,7 @@ import ProfiloSeguiti from '../components/profilo/ProfiloSeguiti';
 import ProfiloVotati from '../components/profilo/ProfiloVotati';
 import ProfiloSalvati from '../components/profilo/ProfiloSalvati';
 import ProfiloCommenti from '../components/profilo/ProfiloCommenti';
+import ProfiloBlacklist from '../components/profilo/ProfiloBlacklist';
 
 export default function PaginaProfilo() {
   const { user } = useAuth();
@@ -20,7 +21,7 @@ export default function PaginaProfilo() {
   const [followedGames, setFollowedGames] = useState([]);
   const [followedEvents, setFollowedEvents] = useState([]);
   const [followedChannels, setFollowedChannels] = useState([]);
-  
+  const [blacklist, setBlacklist] = useState([]);
   const [notifiche, setNotifiche] = useState([]);
   const [votedGames, setVotedGames] = useState([]);
   const [savedArticles, setSavedArticles] = useState([]);
@@ -74,6 +75,13 @@ export default function PaginaProfilo() {
 
         const { data: msgData } = await supabase.from('messaggi_bacheca').select(`id, testo, creato_il, id_mittente, utenti!fk_mittente ( username )`).eq('id_profilo', userData.id).order('creato_il', { ascending: false });
         if (msgData) setBachecaMessages(msgData);
+
+        const { data: blData } = await supabase.from('blacklist').select('id_bloccato').eq('id_utente', userData.id);
+        if (blData && blData.length > 0) {
+          const ids = blData.map(b => b.id_bloccato);
+          const { data: blUsers } = await supabase.from('utenti').select('id, username, profili(avatar_url)').in('id', ids);
+          if (blUsers) setBlacklist(blUsers);
+        }
       }
       setLoading(false);
     }
@@ -126,6 +134,13 @@ export default function PaginaProfilo() {
     await supabase.from('articoli_salvati').delete().eq('id_utente', userDataId).eq('id_articolo', idArticolo);
   };
 
+  // Funzione per sbloccare l'utente dalla blacklist
+  const handleUnblock = async (idBloccato) => {
+    if (!userDataId) return;
+    setBlacklist(prev => prev.filter(u => u.id !== idBloccato));
+    await supabase.from('blacklist').delete().eq('id_utente', userDataId).eq('id_bloccato', idBloccato);
+  };
+
   const formattaData = (dataIso) => {
     if (!dataIso) return '';
     return new Date(dataIso).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -149,7 +164,7 @@ export default function PaginaProfilo() {
     { nome: 'Bacheca', count: bachecaMessages.length }, { nome: 'Notifiche', count: notifiche.filter(n => !n.letta).length },
     { nome: 'Messaggi', count: 0 }, { nome: 'Articoli salvati', count: savedArticles.length }, 
     { nome: 'Seguiti', count: followedGames.length + followedEvents.length + followedChannels.length },
-    { nome: 'Giochi votati', count: votedGames.length }, { nome: 'Blacklist', count: 0 },
+    { nome: 'Giochi votati', count: votedGames.length }, { nome: 'Blacklist', count: blacklist.length },
     { nome: 'Ban e Ammonizioni', count: 1 }, { nome: 'Commenti', count: userComments.length },
   ];
 
@@ -203,6 +218,9 @@ export default function PaginaProfilo() {
                 {activeTab === 'Giochi votati' && <ProfiloVotati votedGames={votedGames} navigate={navigate} />}
                 {activeTab === 'Articoli salvati' && <ProfiloSalvati savedArticles={savedArticles} handleUnsaveArticle={handleUnsaveArticle} formattaData={formattaData} navigate={navigate} />}
                 {activeTab === 'Commenti' && <ProfiloCommenti userComments={userComments} username={username} formattaData={formattaData} navigate={navigate} />}
+                
+                {/* QUI HO AGGIUNTO IL COMPONENTE BLACKLIST! */}
+                {activeTab === 'Blacklist' && <ProfiloBlacklist blacklist={blacklist} handleUnblock={handleUnblock} />}
               </>
             )}
           </div>

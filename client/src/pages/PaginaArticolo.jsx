@@ -37,11 +37,11 @@ export default function PaginaArticolo() {
   const [isSaved, setIsSaved] = useState(false);
   const [loadingSave, setLoadingSave] = useState(false);
 
-  const fetchComments = async () => {
+  const fetchComments = async (validId) => {
     const { data, error } = await supabase
       .from('commenti')
       .select(`id, testo, data, id_commento_padre, upvotes, downvotes, id_utente, utenti!id_utente ( username, id_ruolo, profili ( avatar_url ) )`)
-      .eq('id_articolo', parseInt(id))
+      .eq('id_articolo', validId)
       .order('data', { ascending: true });
     if (!error && data) setCommentsList(data);
   };
@@ -49,7 +49,18 @@ export default function PaginaArticolo() {
   useEffect(() => {
     async function fetchData() {
       setLoading(true);
-      const { data: articleData } = await supabase.from('articoli').select(`*, categorie(nome)`).eq('id', parseInt(id)).maybeSingle();
+
+      // --- FIX ERRORE NaN IN SUPABASE ---
+      // Controllo se l'ID è un numero valido. Se è "undefined" o corrotto, fermo tutto ed esco.
+      const parsedId = parseInt(id, 10);
+      if (isNaN(parsedId)) {
+        console.error("ID articolo non valido:", id);
+        navigate('/'); // Reindirizza l'utente in home per evitare la pagina rotta
+        return;
+      }
+      // ----------------------------------
+
+      const { data: articleData } = await supabase.from('articoli').select(`*, categorie(nome)`).eq('id', parsedId).maybeSingle();
 
       if (articleData) {
         if (articleData.id_autore) {
@@ -85,16 +96,17 @@ export default function PaginaArticolo() {
            if (gameData) setGame(gameData);
         }
 
-        const { data: sideData } = await supabase.from('articoli').select(`id, titolo, url_immagine, creato_il`).neq('id', parseInt(id)).order('creato_il', { ascending: false }).limit(6);
+        const { data: sideData } = await supabase.from('articoli').select(`id, titolo, url_immagine, creato_il`).neq('id', parsedId).order('creato_il', { ascending: false }).limit(6);
         if (sideData) setSidebarArticles(sideData);
 
-        await fetchComments();
+        await fetchComments(parsedId);
       }
       setLoading(false);
       window.scrollTo(0, 0);
     }
+    
     fetchData();
-  }, [id, user]);
+  }, [id, user, navigate]); // Aggiunto navigate come dipendenza
 
   useEffect(() => {
     if (commentsList.length > 0 && window.location.hash) {
@@ -190,8 +202,9 @@ export default function PaginaArticolo() {
     setIsSubmitting(true);
     const { data: userData } = await supabase.from('utenti').select('id, username').eq('id_auth', user.id).maybeSingle();
     if (userData) {
+      const parsedId = parseInt(id, 10);
       const { data: newDbComment, error } = await supabase.from('commenti').insert([{ 
-        testo: newCommentText, id_articolo: parseInt(id), id_utente: userData.id, id_commento_padre: replyingTo, data: new Date().toISOString() 
+        testo: newCommentText, id_articolo: parsedId, id_utente: userData.id, id_commento_padre: replyingTo, data: new Date().toISOString() 
       }]).select().single();
 
       if (!error) { 
@@ -201,7 +214,7 @@ export default function PaginaArticolo() {
             await supabase.from('notifiche').insert([{ id_utente: parentComment.id_utente, testo: `${userData.username} ha risposto al tuo commento in "${article.titolo}"`, link: `/articolo/${id}#commento-${newDbComment.id}`, letta: false }]);
           }
         }
-        setNewCommentText(''); setReplyingTo(null); fetchComments(); 
+        setNewCommentText(''); setReplyingTo(null); fetchComments(parsedId); 
         setArticle(prev => ({ ...prev, commenti: (prev.commenti || 0) + 1 })); 
       }
     }
@@ -218,7 +231,8 @@ export default function PaginaArticolo() {
       let newUpvotes = 0, newDownvotes = 0;
       allVotes?.forEach(v => { if (v.voto === 1) newUpvotes++; if (v.voto === -1) newDownvotes++; });
       await supabase.from('commenti').update({ upvotes: newUpvotes, downvotes: newDownvotes }).eq('id', commentId);
-      fetchComments();
+      const parsedId = parseInt(id, 10);
+      if (!isNaN(parsedId)) fetchComments(parsedId);
     }
   };
 
