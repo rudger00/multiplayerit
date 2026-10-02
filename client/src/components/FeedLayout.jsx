@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom'; // <-- IMPORTANTE: Aggiunto per far funzionare i click!
 import ArticleCard from './ArticleCard';
 import { getImg, formatTime, getTag } from '../utils/helpers';
 
@@ -8,14 +9,27 @@ import WidgetUltimeRecensioni from './home/WidgetUltimeRecensioni';
 import WidgetGiochiAttesi from './home/WidgetGiochiAttesi';
 
 export default function FeedLayout({ articles = [], showIntro = null }) {
-  // Array sicuri: evitano errori se ci sono meno articoli del previsto
-  const topArticles = articles.slice(0, 3);
-  const bottomArticles = articles.slice(3, 7);
-  const ultimeNotizie = articles.slice(7, 12);
-  const centroFeed = articles.slice(12, 17);
+  // 1. SEZIONE GIALLA (Ultimi 7 articoli in assoluto)
+  const headerArticles = articles.slice(0, 7);
+  const topArticles = headerArticles.slice(0, 3);
+  const bottomArticles = headerArticles.slice(3, 7);
+
+  // Dal 8° articolo in poi, dividiamo in base alla categoria
+  const remainingArticles = articles.slice(7);
+
+  // 2. SEZIONE VERDE (Solo le Notizie) - Controlla ID 1 o nome "NEWS"
+  const ultimeNotizie = remainingArticles
+    .filter(a => a.id_categoria === 1 || a.categorie?.nome?.toUpperCase() === 'NEWS')
+    .slice(0, 15); // Limite di 15 notizie
+
+  // 3. SEZIONE ARANCIONE (Tutti gli altri tipi: Recensioni, Speciali, ecc.)
+  const centroFeed = remainingArticles
+    .filter(a => a.id_categoria !== 1 && a.categorie?.nome?.toUpperCase() !== 'NEWS')
+    .slice(0, 10); // Limite di 10 articoli 
 
   return (
     <>
+      {/* SEZIONE GIALLA - TOP 7 */}
       <header className="max-w-[1450px] mx-auto p-1 mt-2">
         {articles.length > 0 ? (
           <>
@@ -42,6 +56,7 @@ export default function FeedLayout({ articles = [], showIntro = null }) {
         <main className="max-w-[1450px] mx-auto p-1 mt-6">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             
+            {/* SEZIONE VERDE - NOTIZIE */}
             <div className="lg:col-span-6 flex flex-col">
               <div className="bg-[#2A153A] border border-[#3b1d52] p-4 mb-2">
                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 block">PROSSIME LIVE</span>
@@ -49,8 +64,9 @@ export default function FeedLayout({ articles = [], showIntro = null }) {
               </div>
               
               <div className="flex flex-col mt-4">
-                {ultimeNotizie.map((news) => (
-                  <div key={news.id} className="flex gap-4 py-4 border-b border-gray-800/60 hover:bg-[#1a1a1a] cursor-pointer group transition-colors">
+                {ultimeNotizie.length > 0 ? ultimeNotizie.map((news) => (
+                  /* Trasformato div in Link */
+                  <Link to={`/articolo/${news.id}`} key={news.id} className="flex gap-4 py-4 border-b border-gray-800/60 hover:bg-[#1a1a1a] cursor-pointer group transition-colors block">
                     <div className="relative w-[130px] h-[75px] shrink-0 overflow-hidden">
                       <img src={getImg(news.url_immagine)} alt={news.titolo} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
                       <div className="absolute top-1 right-1 bg-red-600 text-white text-[9px] font-bold px-1.5 flex items-center gap-1">💬 {news.commenti ?? 0}</div>
@@ -61,14 +77,16 @@ export default function FeedLayout({ articles = [], showIntro = null }) {
                       </p>
                       <h4 className="text-[14px] font-bold leading-snug group-hover:text-red-500 transition-colors text-gray-100">{news.titolo}</h4>
                     </div>
-                  </div>
-                ))}
+                  </Link>
+                )) : <p className="text-gray-500 text-sm py-4 italic">Nessuna nuova notizia disponibile.</p>}
               </div>
             </div>
 
+            {/* SEZIONE ARANCIONE - ALTRI ARTICOLI */}
             <div className="lg:col-span-3 flex flex-col gap-6">
-               {centroFeed.map((item) => (
-                  <div key={item.id} className="cursor-pointer group flex flex-col bg-[#141414]">
+               {centroFeed.length > 0 ? centroFeed.map((item) => (
+                  /* Trasformato div in Link */
+                  <Link to={`/articolo/${item.id}`} key={item.id} className="cursor-pointer group flex flex-col bg-[#141414] block">
                     <div className="relative h-[170px] w-full overflow-hidden shrink-0">
                       <img src={getImg(item.url_immagine)} alt={item.titolo} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                       <div className="absolute top-2 right-2 bg-red-600 text-white text-[10px] font-bold px-1.5 flex items-center gap-1 z-10">💬 {item.commenti ?? 0}</div>
@@ -79,8 +97,8 @@ export default function FeedLayout({ articles = [], showIntro = null }) {
                       </p>
                       <h2 className="text-[15px] font-bold leading-snug group-hover:text-red-500 transition-colors">{item.titolo}</h2>
                     </div>
-                  </div>
-               ))}
+                  </Link>
+               )) : <p className="text-gray-500 text-sm py-4 italic">Nessun altro articolo disponibile.</p>}
             </div>
 
             <div className="lg:col-span-3 flex flex-col gap-0">

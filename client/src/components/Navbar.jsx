@@ -34,11 +34,19 @@ export default function Navbar() {
   const [notifiche, setNotifiche] = useState([]);
   const [userDataId, setUserDataId] = useState(null);
   const [userRole, setUserRole] = useState(null); 
-  const [avatarUrl, setAvatarUrl] = useState(''); // <-- STATO AVATAR AGGIUNTO
+  const [avatarUrl, setAvatarUrl] = useState('');
+
+  // TRUCCO ANTI-SCROLLBAR: Nascondiamo l'overflow orizzontale a tutta la pagina
+  useEffect(() => {
+    document.body.style.overflowX = 'hidden';
+    return () => {
+      document.body.style.overflowX = 'auto';
+    };
+  }, []);
 
   useEffect(() => {
     async function fetchDropdownData() {
-      const { data: newsData } = await supabase.from('articoli').select('id, titolo, url_immagine, creato_il').eq('stato', 'PUBLISHED').order('creato_il', { ascending: false }).limit(5);
+      const { data: newsData } = await supabase.from('articoli').select('id, titolo, url_immagine, creato_il').eq('stato', 'PUBLISHED').eq('id_categoria', 1).order('creato_il', { ascending: false }).limit(5);
       if (newsData) setNavNews(newsData);
       
       const { data: recData } = await supabase.from('articoli').select('id, titolo, url_immagine, corpo, creato_il').eq('stato', 'PUBLISHED').eq('id_categoria', 2).order('creato_il', { ascending: false }).limit(5);
@@ -59,7 +67,6 @@ export default function Navbar() {
         setUserDataId(userData.id);
         setUserRole(userData.id_ruolo);
         
-        // RECUPERIAMO L'AVATAR DAL DB
         const { data: profileData } = await supabase.from('profili').select('avatar_url').eq('id_utente', userData.id).maybeSingle();
         if (profileData && profileData.avatar_url) {
           setAvatarUrl(profileData.avatar_url);
@@ -119,7 +126,7 @@ export default function Navbar() {
   const isAdmin = userRole === 1;
 
   return (
-    <nav className="sticky top-0 w-full flex items-center justify-between bg-[#1a1a1a] h-14 border-b border-gray-800 z-[100] shadow-sm">
+    <nav className="sticky top-0 w-full flex items-center justify-between bg-[#1a1a1a] h-14 border-b border-gray-800 z-[100] shadow-sm max-w-[100vw]">
       <div className="flex items-center h-full">
         <Link to="/" className="flex items-center h-full px-4 shrink-0" onClick={closeAll}>
           <span className="text-[22px] font-bold italic tracking-tighter cursor-pointer text-white lowercase">multiplayer<span className="text-[#ff2020]">.it</span></span>
@@ -166,8 +173,8 @@ export default function Navbar() {
           <li className="relative h-full flex items-center" onMouseEnter={() => handleMouseEnter('piattaforme')} onMouseLeave={handleMouseLeave}>
             <button onClick={() => handleToggleLock('piattaforme')} className={`h-full px-3 flex items-center gap-1.5 transition-colors uppercase ${isOpen('piattaforme') ? 'bg-white/10' : 'hover:text-gray-300'}`}><span className="font-black text-sm text-[#ff2020] leading-none mb-0.5">☰</span> {navPlatformLabel}</button>
             {isOpen('piattaforme') && (
-              <div className="absolute top-14 left-0 w-[440px] bg-[#161616] border border-gray-800 shadow-2xl p-5 grid grid-cols-2 gap-x-6 gap-y-4 z-50 text-white select-none">
-                <div className="flex flex-col gap-4"><Link to="/" onClick={closeAll} className="flex items-center gap-3.5 hover:text-[#ff2020] cursor-pointer transition-colors group"><span className="text-xl">🎮</span><span className="font-black text-sm tracking-wide">TUTTE</span></Link><Link to="/ps5" onClick={closeAll} className="flex items-center gap-3.5 hover:text-[#ff2020] cursor-pointer transition-colors group"><span className="text-xl font-black">PS</span><span className="font-black text-sm tracking-wide">PLAYSTATION 5</span></Link><Link to="/xbox-one" onClick={closeAll} className="flex items-center gap-3.5 hover:text-[#ff2020] cursor-pointer transition-colors group"><span className="text-xl font-black">⨂</span><span className="font-black text-sm tracking-wide">XBOX ONE</span></Link><Link to="/nintendo-switch" onClick={closeAll} className="flex items-center gap-3.5 hover:text-[#ff2020] cursor-pointer transition-colors group"><span className="text-xl">🕹️</span><span className="font-black text-sm tracking-wide">NINTENDO SWITCH</span></Link><Link to="/android" onClick={closeAll} className="flex items-center gap-3.5 hover:text-[#ff2020] cursor-pointer transition-colors group"><span className="text-xl">🤖</span><span className="font-black text-sm tracking-wide">ANDROID</span></Link></div>
+              <div className="absolute top-14 left-0 w-[440px] max-w-[90vw] bg-[#161616] border border-gray-800 shadow-2xl p-5 grid grid-cols-2 gap-x-6 gap-y-4 z-50 text-white select-none">
+                <div className="flex flex-col gap-4"><Link to="/" onClick={closeAll} className="flex items-center gap-3.5 hover:text-[#ff2020] cursor-pointer transition-colors group"><span className="text-xl">🎮</span><span className="font-black text-sm tracking-wide">TUTTE</span></Link><Link to="/ps5" onClick={closeAll} className="flex items-center gap-3.5 hover:text-[#ff2020] cursor-pointer transition-colors group"><span className="text-xl font-black">PS</span><span className="font-black text-sm tracking-wide">PLAYSTATION 5</span></Link><Link to="/xbox-one" onClick={closeAll} className="flex items-center gap-3.5 hover:text-[#ff2020] cursor-pointer transition-colors group"><span className="text-xl font-black">⨂</span><span className="font-black text-sm tracking-wide">XBOX ONE</span></Link><Link to="/nintendo-switch" onClick={closeAll} className="flex items-center gap-3.5 hover:text-[#ff2020] cursor-pointer transition-colors group"><span className="text-xl">🕹</span><span className="font-black text-sm tracking-wide">NINTENDO SWITCH</span></Link><Link to="/android" onClick={closeAll} className="flex items-center gap-3.5 hover:text-[#ff2020] cursor-pointer transition-colors group"><span className="text-xl">🤖</span><span className="font-black text-sm tracking-wide">ANDROID</span></Link></div>
                 <div className="flex flex-col gap-4"><Link to="/pc" onClick={closeAll} className="flex items-center gap-3.5 hover:text-[#ff2020] cursor-pointer transition-colors group"><span className="border border-white/60 rounded px-1 text-[11px] font-black group-hover:border-[#ff2020]">PC</span><span className="font-black text-sm tracking-wide">PC</span></Link><Link to="/ps4" onClick={closeAll} className="flex items-center gap-3.5 hover:text-[#ff2020] cursor-pointer transition-colors group"><span className="text-xl font-black">PS</span><span className="font-black text-sm tracking-wide">PLAYSTATION 4</span></Link><Link to="/xbox-series-x-s" onClick={closeAll} className="flex items-center gap-3.5 hover:text-[#ff2020] cursor-pointer transition-colors group"><span className="text-xl font-black">⨂</span><span className="font-black text-sm tracking-wide">XBOX SERIES X/S</span></Link><Link to="/ios" onClick={closeAll} className="flex items-center gap-3.5 hover:text-[#ff2020] cursor-pointer transition-colors group"><span className="text-xl font-serif"></span><span className="font-black text-sm tracking-wide">IOS</span></Link></div>
               </div>
             )}
@@ -175,11 +182,17 @@ export default function Navbar() {
           <li className="relative h-full flex items-center" onMouseEnter={() => handleMouseEnter('recensioni')} onMouseLeave={handleMouseLeave}>
             <button onClick={() => handleToggleLock('recensioni')} className={`h-full px-3 flex items-center gap-1.5 transition-colors uppercase ${isOpen('recensioni') ? 'bg-white/10' : 'hover:text-gray-300'}`}><span className="font-black text-sm text-[#ff2020] leading-none mb-0.5">☰</span> RECENSIONI</button>
             {isOpen('recensioni') && (
-              <div className="absolute top-14 left-0 w-[420px] bg-[#161616] border border-gray-800 shadow-2xl flex flex-col z-50">
+              <div className="absolute top-14 left-0 w-[420px] max-w-[90vw] bg-[#161616] border border-gray-800 shadow-2xl flex flex-col z-50">
                 <Link to="/articoli/recensioni" onClick={closeAll} className="p-3.5 text-xs font-black uppercase tracking-wider text-white hover:bg-white/5 border-b border-gray-800/80 transition-colors">VAI A TUTTE LE RECENSIONI</Link>
                 {navRecensioni.map((rec) => (
                   <Link to={`/articolo/${rec.id}`} onClick={closeAll} key={rec.id} className="flex items-center justify-between p-3 border-b border-gray-800/60 hover:bg-white/5 cursor-pointer transition-colors">
-                    <div className="flex items-center gap-3.5 pr-2"><img src={getImg(rec.url_immagine)} alt={rec.titolo} className="w-13 h-13 object-cover rounded-sm shrink-0 border border-gray-800" /><div className="flex flex-col"><h4 className="text-[13px] font-bold leading-snug text-gray-100 line-clamp-2">{rec.titolo}</h4><span className="text-[11px] text-[#ff2020] font-black uppercase mt-0.5 tracking-wider">{getTag(rec.titolo)}</span></div></div>
+                    <div className="flex items-center gap-3.5 pr-2">
+                      <img src={getImg(rec.url_immagine)} alt={rec.titolo} className="w-13 h-13 object-cover rounded-sm shrink-0 border border-gray-800" />
+                      <div className="flex flex-col">
+                        <h4 className="text-[13px] font-bold leading-snug text-gray-100">{rec.titolo}</h4>
+                        <span className="text-[11px] text-[#ff2020] font-black uppercase mt-0.5 tracking-wider">{getTag(rec.titolo)}</span>
+                      </div>
+                    </div>
                     <span className="text-2xl font-black text-[#ff2020] pl-2 shrink-0">{rec.voto ? parseFloat(rec.voto).toFixed(1) : '-'}</span>
                   </Link>
                 ))}
@@ -187,14 +200,14 @@ export default function Navbar() {
             )}
           </li>
           <li className="relative h-full flex items-center" onMouseEnter={() => handleMouseEnter('news')} onMouseLeave={handleMouseLeave}>
-            <button onClick={() => handleToggleLock('news')} className={`h-full px-3 flex items-center gap-1.5 transition-colors uppercase ${isOpen('news') ? 'bg-white/10' : 'hover:text-gray-300'}`}><span className="font-black text-sm text-[#ff2020] leading-none mb-0.5">☰</span> NEWS</button>
+            <button onClick={() => handleToggleLock('news')} className={`h-full px-3 flex items-center gap-1.5 transition-colors uppercase ${isOpen('news') ? 'bg-[#ff2020] text-white' : 'hover:text-gray-300'}`}><span className="font-black text-sm text-[#ff2020] leading-none mb-0.5">☰</span> NEWS</button>
             {isOpen('news') && (
-              <div className="absolute top-14 left-0 w-[430px] bg-[#161616] border border-gray-800 shadow-2xl flex flex-col z-50">
+              <div className="absolute top-14 left-0 w-[430px] max-w-[90vw] bg-[#161616] border border-gray-800 shadow-2xl flex flex-col z-50">
                 <Link to="/articoli/news" onClick={closeAll} className="p-3.5 text-xs font-black uppercase tracking-wider text-white hover:bg-white/5 border-b border-gray-800/80 transition-colors">VAI A TUTTE LE NEWS</Link>
                 {navNews.map((news) => (
                   <Link to={`/articolo/${news.id}`} onClick={closeAll} key={news.id} className="flex items-center gap-3.5 p-3 border-b border-gray-800/60 hover:bg-white/5 cursor-pointer transition-colors">
                     <img src={getImg(news.url_immagine)} alt={news.titolo} className="w-13 h-13 object-cover rounded-sm shrink-0 border border-gray-800" />
-                    <h4 className="text-[13px] font-bold leading-snug text-gray-100 line-clamp-2">{news.titolo}</h4>
+                    <h4 className="text-[13px] font-bold leading-snug text-gray-100">{news.titolo}</h4>
                   </Link>
                 ))}
               </div>
@@ -204,6 +217,13 @@ export default function Navbar() {
           <li className="relative h-full flex items-center">
             <Link to="/video" onClick={closeAll} className="px-3 hover:text-gray-300 transition-colors uppercase h-full flex items-center">
               VIDEO
+            </Link>
+          </li>
+          
+          {/* SEZIONE LIVE AGGIUNTA TRA VIDEO E GIOCHI */}
+          <li className="relative h-full flex items-center">
+            <Link to="/live" onClick={closeAll} className="px-3 hover:text-gray-300 transition-colors uppercase h-full flex items-center">
+              LIVE
             </Link>
           </li>
           
@@ -222,7 +242,6 @@ export default function Navbar() {
           <div className="relative h-full border-l border-gray-700">
             <button onClick={() => user ? setIsProfileOpen(!isProfileOpen) : openModal()} className={`h-full px-4 flex items-center justify-center cursor-pointer transition-colors relative ${isProfileOpen ? 'bg-[#ff2020] text-white' : 'hover:text-white'}`}>
               
-              {/* QUI MOSTRA L'AVATAR NELLA NAVBAR SE ESISTE (TIPO GIRAFFA), ALTRIMENTI L'ICONA UTENTE */}
               {user && avatarUrl ? (
                 <div className="w-7 h-7 rounded-full overflow-hidden border border-gray-500 bg-[#222]">
                   <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
@@ -248,7 +267,6 @@ export default function Navbar() {
                 <div onClick={() => { closeAll(); navigate('/profilo'); }} className="p-5 flex items-center justify-between relative cursor-pointer hover:bg-white/5 transition-colors group">
                   <div className="flex items-center gap-4">
                     <div className="relative group-hover:scale-105 transition-transform">
-                      {/* QUI MOSTRA L'AVATAR NEL MENU A TENDINA (GRANDE) */}
                       <div className="w-[60px] h-[60px] rounded-full border-[3px] border-gray-600 bg-[#2a2a2a] flex items-center justify-center overflow-hidden">
                         {avatarUrl ? (
                            <img src={avatarUrl} alt="Avatar Menu" className="w-full h-full object-cover" />

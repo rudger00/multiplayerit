@@ -57,16 +57,24 @@ export default function PaginaCategoria() {
 
       if (activePlatform !== 'tutte' && PLATFORM_ID_MAP[activePlatform]) {
         const platformId = PLATFORM_ID_MAP[activePlatform];
-        query = supabase.from('articoli').select(`*, categorie ( nome ), articoli_piattaforme!inner(id_piattaforma)`).eq('articoli_piattaforme.id_piattaforma', platformId);
+        query = supabase.from('articoli').select(`*, articoli_piattaforme!inner(id_piattaforma)`).eq('articoli_piattaforme.id_piattaforma', platformId);
       } else {
-        query = supabase.from('articoli').select(`*, categorie ( nome )`);
+        query = supabase.from('articoli').select(`*`);
       }
 
+      query = query.eq('stato', 'PUBLISHED');
+
       if (catInfo.id) query = query.eq('id_categoria', catInfo.id);
+      
       query = query.order('creato_il', { ascending: false });
 
       const { data, error } = await query;
-      if (!error && data) setArticles(data);
+      
+      if (error) {
+        console.error("Errore fetch categorie:", error);
+      } else if (data) {
+        setArticles(data);
+      }
       setLoading(false);
     }
     window.scrollTo(0, 0);
@@ -96,6 +104,9 @@ export default function PaginaCategoria() {
                 const dataVisualizzata = (oreFa > 0 && oreFa < 24) ? `${oreFa} ore fa` : dataCorta;
 
                 const finalCategoryLabel = getCategoryLabel(item, catInfo);
+                
+                // --- FIX: RIPULISCE L'HTML PRIMA DI STAMPARLO A SCHERMO ---
+                const testoAnteprima = item.sommario || (item.corpo ? item.corpo.replace(/<[^>]+>/g, '') : 'Nessun testo disponibile per questo articolo.');
 
                 return (
                   <Link to={`/articolo/${item.id}`} key={item.id} className="flex items-center justify-between py-5 border-b border-gray-800/80 group cursor-pointer">
@@ -122,13 +133,13 @@ export default function PaginaCategoria() {
                             <span className="text-[#ff2020] font-black uppercase tracking-widest text-[11px]">{finalCategoryLabel}</span>
                             <span className="font-bold text-gray-300 text-[11px]"> - {dataVisualizzata}</span>
                             <span className="mx-1.5 text-gray-500">|</span>
-                            {item.corpo || 'Nessun testo disponibile per questo articolo.'}
+                            {/* ORA MOSTRA IL TESTO PULITO SENZA <p> */}
+                            {testoAnteprima}
                           </p>
                         )}
                       </div>
                     </div>
                     
-                    {/* VOTO REALE PRESO DAL DATABASE */}
                     {isRecensioni && (
                       <div className="pl-4 shrink-0">
                         <span className="text-[#ff2020] text-4xl font-semibold tracking-tighter">
@@ -139,7 +150,7 @@ export default function PaginaCategoria() {
                   </Link>
                 );
               })
-            ) : <p className="text-gray-400 py-10 font-bold">Nessun articolo trovato.</p>}
+            ) : <p className="text-gray-400 py-10 font-bold">Nessun articolo trovato in questa categoria.</p>}
           </div>
           
           {articles.length > 0 && (

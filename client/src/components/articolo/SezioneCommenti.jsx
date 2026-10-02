@@ -12,6 +12,8 @@ export default function SezioneCommenti({
   const [isReporting, setIsReporting] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   
+  // STATO PER L'ID DELL'UTENTE CORRENTE
+  const [currentUserId, setCurrentUserId] = useState(null);
   // STATO PER LA BLACKLIST
   const [myBlacklist, setMyBlacklist] = useState([]);
 
@@ -20,12 +22,15 @@ export default function SezioneCommenti({
       if (user) {
         const { data: uData } = await supabase.from('utenti').select('id, id_ruolo').eq('id_auth', user.id).maybeSingle();
         if (uData) {
+          setCurrentUserId(uData.id); // Memorizziamo l'id per nascondere i bottoni sui propri commenti
           if (uData.id_ruolo === 1) setIsAdmin(true);
           
           // Peschiamo la blacklist
           const { data: bl } = await supabase.from('blacklist').select('id_bloccato').eq('id_utente', uData.id);
           if (bl) setMyBlacklist(bl.map(b => b.id_bloccato));
         }
+      } else {
+        setCurrentUserId(null);
       }
     }
     checkAdminAndBlacklist();
@@ -133,6 +138,9 @@ export default function SezioneCommenti({
 
           // CONTROLLO BLACKLIST
           const isBlocked = myBlacklist.includes(comment.id_utente);
+          
+          // CONTROLLO COMMENTO PROPRIO
+          const isMyComment = currentUserId === comment.id_utente;
 
           if (isBlocked) {
             return (
@@ -160,7 +168,6 @@ export default function SezioneCommenti({
                   </div>
                   <div className="flex flex-col">
                     <div className="flex items-center gap-2">
-                      {/* LINK AL PROFILO */}
                       <a href={`/utente/${comment.utenti?.username}`} className="text-white font-bold text-[15px] hover:text-[#ff2020] transition-colors cursor-pointer">
                         {comment.utenti?.username}
                       </a>
@@ -185,14 +192,19 @@ export default function SezioneCommenti({
                   <button className="text-[#ff4444] hover:text-red-400 transition-colors">Permalink</button>
                 </div>
                 
-                {/* BOTTONI BLOCCA E SEGNALA */}
+                {/* BOTTONI BLOCCA E SEGNALA: nascosti se è il proprio commento */}
                 <div className="flex gap-4">
-                  <button onClick={() => { if(!user) openModal(); else handleBlockUser(comment.id_utente, comment.utenti?.username); }} className="text-gray-500 hover:text-white transition-colors flex items-center gap-1">🔒 Blocca</button>
-                  <button onClick={() => { if(!user) openModal(); else setReportingCommentId(comment.id); }} className="text-gray-500 hover:text-white transition-colors">Segnala</button>
+                  {!isMyComment && (
+                    <>
+                      <button onClick={() => { if(!user) openModal(); else handleBlockUser(comment.id_utente, comment.utenti?.username); }} className="text-gray-500 hover:text-white transition-colors flex items-center gap-1">🔒 Blocca</button>
+                      <button onClick={() => { if(!user) openModal(); else setReportingCommentId(comment.id); }} className="text-gray-500 hover:text-white transition-colors">Segnala</button>
+                    </>
+                  )}
                 </div>
               </div>
 
-              {isAdmin && comment.id_utente && (
+              {/* BOTTONI ADMIN: nascosti se l'admin guarda il proprio commento */}
+              {isAdmin && !isMyComment && comment.id_utente && (
                 <div className="ml-[60px] mt-4 pt-3 border-t border-gray-800/80 flex gap-2">
                   <span className="text-[10px] font-black text-gray-500 uppercase flex items-center mr-2">Admin:</span>
                   <button onClick={() => handleWarn(comment.id_utente)} className="bg-[#e6c200] hover:bg-yellow-500 text-black px-3 py-1 text-[10px] font-black uppercase tracking-widest rounded-sm transition-colors">Cartellino</button>
