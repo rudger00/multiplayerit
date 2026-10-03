@@ -36,12 +36,9 @@ export default function Navbar() {
   const [userRole, setUserRole] = useState(null); 
   const [avatarUrl, setAvatarUrl] = useState('');
 
-  // TRUCCO ANTI-SCROLLBAR: Nascondiamo l'overflow orizzontale a tutta la pagina
   useEffect(() => {
     document.body.style.overflowX = 'hidden';
-    return () => {
-      document.body.style.overflowX = 'auto';
-    };
+    return () => { document.body.style.overflowX = 'auto'; };
   }, []);
 
   useEffect(() => {
@@ -58,26 +55,16 @@ export default function Navbar() {
 
   useEffect(() => {
     async function fetchUserData() {
-      if (!user) {
-        setAvatarUrl('');
-        return;
-      }
+      if (!user) { setAvatarUrl(''); return; }
       const { data: userData } = await supabase.from('utenti').select('id, id_ruolo').eq('id_auth', user.id).maybeSingle();
       if (userData) {
         setUserDataId(userData.id);
         setUserRole(userData.id_ruolo);
         
         const { data: profileData } = await supabase.from('profili').select('avatar_url').eq('id_utente', userData.id).maybeSingle();
-        if (profileData && profileData.avatar_url) {
-          setAvatarUrl(profileData.avatar_url);
-        }
+        if (profileData && profileData.avatar_url) setAvatarUrl(profileData.avatar_url);
 
-        const { data: notifData } = await supabase
-          .from('notifiche')
-          .select('*')
-          .eq('id_utente', userData.id)
-          .eq('letta', false)
-          .order('creato_il', { ascending: false });
+        const { data: notifData } = await supabase.from('notifiche').select('*').eq('id_utente', userData.id).eq('letta', false).order('creato_il', { ascending: false });
         if (notifData) setNotifiche(notifData);
       }
     }
@@ -100,9 +87,20 @@ export default function Navbar() {
   useEffect(() => {
     const fetchLiveResults = async () => {
       if (searchQuery.trim().length > 2) {
-        const { data } = await supabase.from('articoli').select(`*, categorie ( nome )`).eq('stato', 'PUBLISHED').ilike('titolo', `%${searchQuery}%`).limit(4);
-        if (data) setLiveSearchResults(data);
-      } else { setLiveSearchResults([]); }
+        // CERCHIAMO SIA NEI GIOCHI CHE NEGLI ARTICOLI
+        const { data: articoliData } = await supabase.from('articoli').select(`id, titolo, url_immagine, categorie ( nome )`).eq('stato', 'PUBLISHED').ilike('titolo', `%${searchQuery}%`).limit(3);
+        const { data: giochiData } = await supabase.from('giochi').select(`id, titolo, url_immagine`).ilike('titolo', `%${searchQuery}%`).limit(2);
+        
+        // UNIAMO I RISULTATI AGGIUNGENDO IL TIPO
+        const combined = [
+          ...(giochiData || []).map(g => ({ ...g, type: 'gioco' })),
+          ...(articoliData || []).map(a => ({ ...a, type: 'articolo' }))
+        ];
+        
+        setLiveSearchResults(combined);
+      } else { 
+        setLiveSearchResults([]); 
+      }
     };
     const delayDebounceFn = setTimeout(() => fetchLiveResults(), 300);
     return () => clearTimeout(delayDebounceFn);
@@ -143,11 +141,29 @@ export default function Navbar() {
           {liveSearchResults.length > 0 && (
             <div className="absolute top-14 left-0 w-full bg-[#1a1a1a] border-t border-gray-800 shadow-2xl flex flex-col z-50">
               {liveSearchResults.map(item => (
-                <div key={item.id} className="flex items-center gap-4 p-3 border-b border-gray-800 hover:bg-white/5 cursor-pointer transition-colors" onClick={() => handleSearchSubmit(item.titolo)}>
-                  <img src={getImg(item.url_immagine)} alt={item.titolo} className="w-14 h-14 object-cover rounded-sm border border-gray-800" />
-                  <div className="flex flex-col"><h4 className="text-base font-black uppercase text-gray-200">{item.titolo}</h4><p className="text-xs font-bold text-gray-400 mt-1">Categoria: <span className="text-[#ff2020] uppercase">{item.categorie?.nome || 'VARIE'}</span></p></div>
+                <div key={`${item.type}-${item.id}`} className="flex items-center gap-4 p-3 border-b border-gray-800 hover:bg-white/5 cursor-pointer transition-colors" 
+                  onClick={() => { 
+                    closeAll(); 
+                    // NAVIGA DIRETTAMENTE ALL'ARTICOLO O AL GIOCO!
+                    navigate(item.type === 'gioco' ? `/gioco/${item.id}` : `/articolo/${item.id}`);
+                  }}
+                >
+                  <img src={getImg(item.url_immagine)} alt={item.titolo} className={`object-cover rounded-sm border border-gray-800 ${item.type === 'gioco' ? 'w-10 h-14' : 'w-14 h-14'}`} />
+                  <div className="flex flex-col">
+                    <h4 className="text-base font-black uppercase text-gray-200">{item.titolo}</h4>
+                    <p className="text-xs font-bold text-gray-400 mt-1">
+                      {item.type === 'gioco' ? <span className="text-[#00bfff] uppercase">SCHEDA GIOCO</span> : <span className="text-[#ff2020] uppercase">{item.categorie?.nome || 'ARTICOLO'}</span>}
+                    </p>
+                  </div>
                 </div>
               ))}
+              {/* Pulsante in fondo alla tendina per vedere tutti i risultati */}
+              <div 
+                className="p-3 text-center text-[#ff2020] text-[11px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors"
+                onClick={() => handleSearchSubmit(searchQuery)}
+              >
+                Vedi tutti i risultati per "{searchQuery}"
+              </div>
             </div>
           )}
         </div>
@@ -220,7 +236,6 @@ export default function Navbar() {
             </Link>
           </li>
           
-          {/* SEZIONE LIVE AGGIUNTA TRA VIDEO E GIOCHI */}
           <li className="relative h-full flex items-center">
             <Link to="/live" onClick={closeAll} className="px-3 hover:text-gray-300 transition-colors uppercase h-full flex items-center">
               LIVE

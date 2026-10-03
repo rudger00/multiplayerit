@@ -58,7 +58,6 @@ export default function PaginaAdmin() {
     if (data) setUsersList(data);
   }
 
-  // LOGICA CARTELLINO GESTITA DALLA DASHBOARD (2 STRIKES)
   const handleWarnUser = async (idUtente, currentWarns) => {
     if(!window.confirm("Vuoi aggiungere un'ammonizione a questo utente? (Al 2° cartellino verrà bannato)")) return;
 
@@ -97,16 +96,29 @@ export default function PaginaAdmin() {
 
   async function fetchReports() {
     const { data, error } = await supabase.from('segnalazioni').select('*').order('creato_il', { ascending: false });
-    if (error) return;
+    
+    if (error) {
+      console.error("Errore fetch segnalazioni:", error);
+      return;
+    }
 
     const filteredData = data.filter(rep => rep.stato !== 'RISOLTA' && rep.stato !== 'RIFIUTATA');
+    
     if (filteredData && filteredData.length > 0) {
-      const userIds = [...new Set(filteredData.map(r => r.id_segnalatore))];
-      const { data: usersData } = await supabase.from('utenti').select('id, username').in('id', userIds);
       
+      // FIX: Rimuoviamo i valori null/undefined per evitare crash in Supabase
+      const userIds = [...new Set(filteredData.map(r => r.id_segnalatore).filter(Boolean))];
+      
+      let usersData = [];
+      if (userIds.length > 0) {
+        const { data: uData } = await supabase.from('utenti').select('id, username').in('id', userIds);
+        if (uData) usersData = uData;
+      }
+      
+      // Estraiamo ID dei commenti filtrando i null
       const commentIds = [...new Set(filteredData.filter(r => r.tipo === 'COMMENTO').map(r => r.id_commento_segnalato).filter(Boolean))];
       let commentsData = [];
-      if(commentIds.length > 0) {
+      if (commentIds.length > 0) {
          const { data: cData } = await supabase.from('commenti').select('id, id_articolo').in('id', commentIds);
          if (cData) commentsData = cData;
       }
@@ -241,10 +253,13 @@ export default function PaginaAdmin() {
               {reportsList.length > 0 ? (
                 <div className="flex flex-col gap-4">
                   {reportsList.map(rep => (
-                    <div key={rep.id} className="bg-[#222] p-5 border-l-4 border-[#ff2020] flex flex-col md:flex-row justify-between md:items-center gap-4 shadow-md rounded-sm">
+                    <div key={rep.id} className={`bg-[#222] p-5 border-l-4 ${rep.tipo === 'REDAZIONE' ? 'border-[#9b59b6]' : 'border-[#ff2020]'} flex flex-col md:flex-row justify-between md:items-center gap-4 shadow-md rounded-sm`}>
                       <div className="flex flex-col">
                         <div className="flex items-center gap-2 mb-2">
-                          <span className="bg-[#ff2020] text-white px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest">{rep.tipo}</span>
+                          {/* Colore viola personalizzato per i messaggi alla Redazione */}
+                          <span className={`${rep.tipo === 'REDAZIONE' ? 'bg-[#9b59b6]' : 'bg-[#ff2020]'} text-white px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest`}>
+                            {rep.tipo}
+                          </span>
                           <span className="text-gray-400 text-xs font-bold">{new Date(rep.creato_il).toLocaleString('it-IT')}</span>
                         </div>
                         <p className="text-white font-medium text-[15px] leading-relaxed break-words">{rep.motivo}</p>
@@ -256,6 +271,7 @@ export default function PaginaAdmin() {
                         {rep.tipo === 'ARTICOLO' && rep.id_articolo_segnalato && <button onClick={() => window.open(`/articolo/${rep.id_articolo_segnalato}`, '_blank')} className="px-4 py-2 bg-[#00bfff] hover:bg-blue-600 text-white text-[11px] font-black uppercase tracking-widest rounded-sm transition-colors shadow-md">Apri Articolo</button>}
                         {rep.tipo === 'COMMENTO' && rep.id_commento_segnalato && rep.commento_id_articolo && <button onClick={() => window.open(`/articolo/${rep.commento_id_articolo}#commento-${rep.id_commento_segnalato}`, '_blank')} className="px-4 py-2 bg-[#e6c200] hover:bg-yellow-600 text-black text-[11px] font-black uppercase tracking-widest rounded-sm transition-colors shadow-md">Vedi Commento</button>}
                         {rep.tipo === 'UTENTE' && <button onClick={() => setActiveTab('utenti')} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-[11px] font-black uppercase tracking-widest rounded-sm transition-colors">Vai a Utenti</button>}
+                        
                         <button onClick={() => handleUpdateReportStatus(rep.id, 'RIFIUTATA')} className="px-4 py-2 border border-gray-600 text-gray-400 hover:bg-gray-600 hover:text-white text-[11px] font-black uppercase tracking-widest rounded-sm transition-colors">Ignora</button>
                         <button onClick={() => handleUpdateReportStatus(rep.id, 'RISOLTA')} className="px-4 py-2 bg-[#28a745] hover:bg-green-600 text-white text-[11px] font-black uppercase tracking-widest rounded-sm shadow-md transition-colors">Risolvi</button>
                       </div>

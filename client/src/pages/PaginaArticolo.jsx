@@ -324,16 +324,18 @@ export default function PaginaArticolo() {
 
           <div className="prose prose-invert max-w-none text-gray-300 text-[17px] leading-relaxed break-words [&_img]:block [&_img]:mx-auto [&_img]:my-8 [&_img]:max-w-full [&_img]:rounded-md [&_img]:shadow-xl [&_iframe]:w-full [&_iframe]:aspect-video [&_iframe]:my-8" dangerouslySetInnerHTML={{ __html: article.corpo }} />
 
+          
+
+          {isReview && (
+            <ConclusioniReview article={article} game={game} user={user} openModal={openModal} myGameVote={myGameVote} setMyGameVote={setMyGameVote} handleSaveGameVote={handleSaveGameVote} />
+          )}
+
           {user && (
             <div className="mt-12 mb-8 flex justify-start">
               <button onClick={() => setShowReportModal(true)} className="border border-[#ff2020] text-[#ff2020] font-black uppercase tracking-widest text-[13px] px-6 py-3 hover:bg-[#ff2020] hover:text-white transition-colors">
                 Hai notato errori?
               </button>
             </div>
-          )}
-
-          {isReview && (
-            <ConclusioniReview article={article} game={game} user={user} openModal={openModal} myGameVote={myGameVote} setMyGameVote={setMyGameVote} handleSaveGameVote={handleSaveGameVote} />
           )}
 
           <SezioneCommenti 

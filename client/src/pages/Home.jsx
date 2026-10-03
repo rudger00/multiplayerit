@@ -4,13 +4,14 @@ import FeedLayout from '../components/FeedLayout';
 
 export default function Home() {
   const [articles, setArticles] = useState([]);
+  const [notiziePiuLette, setNotiziePiuLette] = useState([]);
+  const [prossimaLive, setProssimaLive] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function fetchArticoli() {
       setLoading(true);
       try {
-        // STEP 1: Scarichiamo SOLO gli articoli (senza chiedere a Supabase di unire le categorie)
         const { data: articoliData, error: artError } = await supabase
           .from('articoli')
           .select('*')
@@ -23,7 +24,6 @@ export default function Home() {
           return;
         }
 
-        // STEP 2: Scarichiamo la lista delle categorie
         const { data: catData, error: catError } = await supabase
           .from('categorie')
           .select('id, nome');
@@ -32,15 +32,11 @@ export default function Home() {
           console.error("Errore fetch categorie Home:", catError);
         }
 
-        // STEP 3: Uniamo i dati noi con JavaScript (infallibile!)
         if (articoliData) {
           const articoliCompleti = articoliData.map(articolo => {
-            // Cerchiamo la categoria corrispondente
             const categoriaCorrispondente = catData?.find(c => c.id === articolo.id_categoria);
-            
             return {
               ...articolo,
-              // Ricreiamo la struttura che si aspetta FeedLayout ( articolo.categorie.nome )
               categorie: { 
                 nome: categoriaCorrispondente ? categoriaCorrispondente.nome : 'NEWS' 
               }
@@ -48,6 +44,23 @@ export default function Home() {
           });
 
           setArticles(articoliCompleti);
+
+          // Calcoliamo le 5 notizie più "calde" (con più commenti)
+          const newsOnly = articoliCompleti.filter(a => a.id_categoria === 1 || a.categorie.nome.toUpperCase() === 'NEWS');
+          const sortedByPop = [...newsOnly].sort((a, b) => (b.commenti || 0) - (a.commenti || 0)).slice(0, 5);
+          setNotiziePiuLette(sortedByPop);
+        }
+
+        // MODIFICA: Peschiamo dalla tua tabella "palinsesto"
+        const { data: liveData, error: liveError } = await supabase
+          .from('palinsesto')
+          .select('*')
+          .order('ordine', { ascending: true }) // Ordina per la tua colonna "ordine"
+          .limit(1)
+          .maybeSingle();
+
+        if (!liveError && liveData) {
+          setProssimaLive(liveData);
         }
         
       } catch (err) {
@@ -62,5 +75,5 @@ export default function Home() {
 
   if (loading) return <div className="text-center py-20 font-bold text-gray-400">Caricamento Home...</div>;
   
-  return <FeedLayout articles={articles} />;
+  return <FeedLayout articles={articles} notiziePiuLette={notiziePiuLette} prossimaLive={prossimaLive} />;
 }
