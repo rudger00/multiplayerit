@@ -1,6 +1,10 @@
 import React from 'react';
 
-export default function ProfiloCommenti({ userComments, username, formattaData, navigate }) {
+export default function ProfiloCommenti({ userComments, username, avatarUrl, formattaData, navigate }) {
+  
+  // Calcolo l'avatar finale: se c'è l'url usa la foto, altrimenti usa l'iniziale
+  const avatarFinale = avatarUrl || `https://ui-avatars.com/api/?name=${username}&background=2a2a2a&color=fff`;
+
   return (
     <>
       <h2 className="text-white font-black text-2xl uppercase tracking-tight mb-8">I tuoi Commenti</h2>
@@ -12,7 +16,8 @@ export default function ProfiloCommenti({ userComments, username, formattaData, 
                 <div className="flex items-center gap-4">
                   <div className="relative">
                     <div className="w-[52px] h-[52px] rounded-full border-[2px] border-[#ff4444] p-[2px] bg-[#111]">
-                      <img src={`https://ui-avatars.com/api/?name=${username}&background=2a2a2a&color=fff`} alt={username} className="w-full h-full object-cover rounded-full" />
+                      {/* Ora usa l'avatar reale! */}
+                      <img src={avatarFinale} alt={username} className="w-full h-full object-cover rounded-full" />
                     </div>
                   </div>
                   <div className="flex flex-col">

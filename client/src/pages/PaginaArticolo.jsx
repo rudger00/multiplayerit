@@ -19,7 +19,7 @@ export default function PaginaArticolo() {
   const [loading, setLoading] = useState(true);
 
   const [isAdmin, setIsAdmin] = useState(false);
-  const [isBanned, setIsBanned] = useState(false); // STATO BAN AGGIUNTO
+  const [isBanned, setIsBanned] = useState(false); 
 
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportText, setReportText] = useState('');
@@ -37,6 +37,13 @@ export default function PaginaArticolo() {
   const [isSaved, setIsSaved] = useState(false);
   const [loadingSave, setLoadingSave] = useState(false);
 
+  // --- STATI E REFS PER LA READING PROGRESS BAR ---
+  const [readingProgress, setReadingProgress] = useState(0);
+  const [showProgressBar, setShowProgressBar] = useState(true);
+  const articleContentRef = useRef(null);
+  const commentsSectionRef = useRef(null);
+  // ------------------------------------------------
+
   const fetchComments = async (validId) => {
     const { data, error } = await supabase
       .from('commenti')
@@ -50,15 +57,12 @@ export default function PaginaArticolo() {
     async function fetchData() {
       setLoading(true);
 
-      // --- FIX ERRORE NaN IN SUPABASE ---
-      // Controllo se l'ID è un numero valido. Se è "undefined" o corrotto, fermo tutto ed esco.
       const parsedId = parseInt(id, 10);
       if (isNaN(parsedId)) {
         console.error("ID articolo non valido:", id);
-        navigate('/'); // Reindirizza l'utente in home per evitare la pagina rotta
+        navigate('/'); 
         return;
       }
-      // ----------------------------------
 
       const { data: articleData } = await supabase.from('articoli').select(`*, categorie(nome)`).eq('id', parsedId).maybeSingle();
 
@@ -75,7 +79,7 @@ export default function PaginaArticolo() {
           const { data: userData } = await supabase.from('utenti').select('id, id_ruolo, bannato').eq('id_auth', user.id).maybeSingle();
           if (userData) {
             if (userData.id_ruolo === 1) setIsAdmin(true);
-            setIsBanned(userData.bannato); // IMPOSTA STATO BAN
+            setIsBanned(userData.bannato); 
 
             const { data: savedData } = await supabase.from('articoli_salvati').select('*').eq('id_utente', userData.id).eq('id_articolo', articleData.id).maybeSingle();
             if (savedData) setIsSaved(true);
@@ -106,7 +110,55 @@ export default function PaginaArticolo() {
     }
     
     fetchData();
-  }, [id, user, navigate]); // Aggiunto navigate come dipendenza
+  }, [id, user, navigate]); 
+
+  // --- EFFETTO PER LA READING PROGRESS BAR ---
+  useEffect(() => {
+    const handleScroll = () => {
+      if (!articleContentRef.current) return;
+
+      const windowHeight = window.innerHeight;
+      const scrollY = window.scrollY;
+      
+      // Calcoliamo dove inizia e finisce il testo dell'articolo
+      const articleTop = articleContentRef.current.offsetTop;
+      const articleHeight = articleContentRef.current.offsetHeight;
+      const articleBottom = articleTop + articleHeight;
+
+      // Se c'è la sezione commenti, calcoliamo quando ci entriamo
+      let commentsTop = Infinity;
+      if (commentsSectionRef.current) {
+        commentsTop = commentsSectionRef.current.offsetTop;
+      }
+
+      // 1. Calcolo Progressione (0 - 100%)
+      // Vogliamo che parta da 0 quando iniziamo a leggere il corpo e arrivi a 100 quando finiamo
+      let progress = 0;
+      if (scrollY + windowHeight > articleTop) {
+        const scrolledPastArticleStart = (scrollY + windowHeight) - articleTop;
+        progress = (scrolledPastArticleStart / articleHeight) * 100;
+      }
+      
+      // Limitiamo il valore tra 0 e 100
+      progress = Math.max(0, Math.min(100, progress));
+      setReadingProgress(progress);
+
+      // 2. Visibilità della barra
+      // "Spegniamo" la barra quando la finestra raggiunge la sezione commenti
+      if (scrollY + windowHeight > commentsTop + 100) {
+        setShowProgressBar(false);
+      } else {
+        setShowProgressBar(true);
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    // Inizializza subito al caricamento
+    handleScroll();
+
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [article, loading]);
+  // ------------------------------------------
 
   useEffect(() => {
     if (commentsList.length > 0 && window.location.hash) {
@@ -269,6 +321,18 @@ export default function PaginaArticolo() {
   return (
     <div className="bg-[#111111] min-h-screen pb-20 font-sans relative">
       
+      {/* --- READING PROGRESS BAR --- */}
+      <div 
+        className="fixed top-14 left-0 w-full h-[2px] z-[90] transition-opacity duration-300"
+        style={{ opacity: showProgressBar ? 1 : 0 }}
+      >
+        <div 
+          className="h-full bg-[#ff2020] transition-all duration-100 ease-out" 
+          style={{ width: `${readingProgress}%` }}
+        />
+      </div>
+      {/* ---------------------------- */}
+
       {showReportModal && (
         <div className="fixed inset-0 bg-black/90 z-[200] flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-[#1a1a1a] w-full max-w-[600px] border border-gray-800 p-8 relative flex flex-col shadow-2xl">
@@ -284,7 +348,9 @@ export default function PaginaArticolo() {
       )}
 
       <div className="max-w-[1200px] mx-auto px-4 pt-8 flex flex-col lg:flex-row gap-8">
-        <div className="lg:w-[70%] flex flex-col">
+        
+        {/* CORPO PRINCIPALE (A cui diamo il Ref per calcolare l'altezza) */}
+        <div className="lg:w-[70%] flex flex-col" ref={articleContentRef}>
           <div className="flex items-start justify-between gap-4">
             <h1 className="text-3xl md:text-5xl font-black text-white leading-tight tracking-tight">{article.titolo}</h1>
             <div className="flex flex-col items-center gap-2 flex-shrink-0">
@@ -324,8 +390,6 @@ export default function PaginaArticolo() {
 
           <div className="prose prose-invert max-w-none text-gray-300 text-[17px] leading-relaxed break-words [&_img]:block [&_img]:mx-auto [&_img]:my-8 [&_img]:max-w-full [&_img]:rounded-md [&_img]:shadow-xl [&_iframe]:w-full [&_iframe]:aspect-video [&_iframe]:my-8" dangerouslySetInnerHTML={{ __html: article.corpo }} />
 
-          
-
           {isReview && (
             <ConclusioniReview article={article} game={game} user={user} openModal={openModal} myGameVote={myGameVote} setMyGameVote={setMyGameVote} handleSaveGameVote={handleSaveGameVote} />
           )}
@@ -338,14 +402,18 @@ export default function PaginaArticolo() {
             </div>
           )}
 
-          <SezioneCommenti 
-            commentsList={commentsList} newCommentText={newCommentText} setNewCommentText={setNewCommentText} 
-            replyingTo={replyingTo} setReplyingTo={setReplyingTo} isSubmitting={isSubmitting} 
-            handlePostComment={handlePostComment} handleVote={handleVote} handleReplyClick={handleReplyClick} 
-            formatCommentDate={formatCommentDate} commentInputRef={commentInputRef} 
-            user={user} openModal={openModal} 
-            isBanned={isBanned} // PASSIAMO LA PROP
-          />
+          {/* DIV CON REF PER I COMMENTI (per spegnere la barra quando ci arriviamo) */}
+          <div ref={commentsSectionRef}>
+            <SezioneCommenti 
+              commentsList={commentsList} newCommentText={newCommentText} setNewCommentText={setNewCommentText} 
+              replyingTo={replyingTo} setReplyingTo={setReplyingTo} isSubmitting={isSubmitting} 
+              handlePostComment={handlePostComment} handleVote={handleVote} handleReplyClick={handleReplyClick} 
+              formatCommentDate={formatCommentDate} commentInputRef={commentInputRef} 
+              user={user} openModal={openModal} 
+              isBanned={isBanned} 
+            />
+          </div>
+
         </div>
 
         <div className="lg:w-[30%] flex flex-col gap-10">

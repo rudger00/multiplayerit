@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import ProfiloBacheca from '../components/profilo/ProfiloBacheca';
+import ProfiloArticoli from '../components/profilo/ProfiloArticoli'; // NUOVO IMPORT
 
 export default function PaginaProfiloPubblico() {
   const { username } = useParams();
@@ -11,18 +12,24 @@ export default function PaginaProfiloPubblico() {
   
   const [targetUser, setTargetUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('Bacheca'); // STATO PER GESTIRE I TAB
   
   const [bachecaMessages, setBachecaMessages] = useState([]);
   const [newBachecaMessage, setNewBachecaMessage] = useState('');
+  
+  // NUOVI STATI PER FILTRI E SEGNALAZIONI BACHECA (PER FAR FUNZIONARE IL COMPONENTE)
+  const [sortBacheca, setSortBacheca] = useState('recenti');
+  const [reportingMsgId, setReportingMsgId] = useState(null);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportReason, setReportReason] = useState('');
   
   const [hasBlocked, setHasBlocked] = useState(false);
   const [currentUserDataId, setCurrentUserDataId] = useState(null);
 
   const [userStats, setUserStats] = useState({ bacheca: 0, seguiti: 0, votati: 0, commenti: 0 });
-
-  // Stato Modale Segnalazione
-  const [showReportModal, setShowReportModal] = useState(false);
-  const [reportReason, setReportReason] = useState('');
+  
+  // STATO PER GLI ARTICOLI SCRITTI DALL'UTENTE (SE È REDATTORE)
+  const [writtenArticles, setWrittenArticles] = useState([]);
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -38,17 +45,27 @@ export default function PaginaProfiloPubblico() {
         .maybeSingle();
 
       if (tUser) {
-        // Estrai profilo in modo sicuro
         const prof = tUser.profili ? (Array.isArray(tUser.profili) ? tUser.profili[0] : tUser.profili) : {};
         setTargetUser({ ...tUser, profile: prof });
 
         // 2. Carica messaggi bacheca
         const { data: msgData } = await supabase.from('messaggi_bacheca')
-          .select(`id, testo, creato_il, id_mittente, utenti!fk_mittente ( username )`)
+          .select(`id, testo, creato_il, id_mittente, upvotes, downvotes, utenti!fk_mittente ( username, profili (avatar_url) )`)
           .eq('id_profilo', tUser.id)
           .order('creato_il', { ascending: false });
         
         if (msgData) setBachecaMessages(msgData);
+
+        // NUOVO: SE È REDATTORE O ADMIN (1 o 2), CARICA GLI ARTICOLI
+        if (tUser.id_ruolo === 1 || tUser.id_ruolo === 2) {
+          const { data: artData } = await supabase
+            .from('articoli')
+            .select('id, titolo, sommario, url_immagine, creato_il, categorie(nome)')
+            .eq('id_autore', tUser.id)
+            .eq('stato', 'PUBLISHED')
+            .order('creato_il', { ascending: false });
+          if (artData) setWrittenArticles(artData);
+        }
 
         // 3. Statistiche utente
         const [ { count: cGiochi }, { count: cEventi }, { count: cCanali }, { count: cVoti }, { count: cCommenti } ] = await Promise.all([
@@ -92,8 +109,6 @@ export default function PaginaProfiloPubblico() {
     return null;
   };
 
-  // ---> AZIONI DEI BOTTONI REALI <---
-  
   const clickMessaggio = () => {
     if (!user) { openModal(); return; }
     alert("I messaggi privati saranno attivati a breve!");
@@ -101,6 +116,7 @@ export default function PaginaProfiloPubblico() {
 
   const clickSegnala = () => {
     if (!user) { openModal(); return; }
+    setReportingMsgId(null);
     setShowReportModal(true);
   };
 
@@ -127,11 +143,15 @@ export default function PaginaProfiloPubblico() {
     const myId = await getMyId();
     if (!myId) return;
 
+    const testoFinale = reportingMsgId 
+      ? `[Segnalazione Messaggio ID ${reportingMsgId}] ${reportReason}`
+      : `[Segnalazione Utente] ${reportReason}`;
+
     const { error } = await supabase.from('segnalazioni').insert([{ 
       id_segnalatore: myId, 
       tipo: 'UTENTE', 
       id_utente_segnalato: targetUser.id,
-      motivo: reportReason 
+      motivo: testoFinale 
     }]);
 
     if (error) {
@@ -140,7 +160,24 @@ export default function PaginaProfiloPubblico() {
       alert("Segnalazione inviata allo staff con successo.");
       setShowReportModal(false);
       setReportReason('');
+      setReportingMsgId(null);
     }
+  };
+
+  // Funzione Voti Bacheca
+  const handleVoteBacheca = async (msgId, voteValue) => {
+    if (!user) { openModal(); return; }
+    const myId = await getMyId();
+    if (!myId) return;
+    
+    await supabase.from('bacheca_voti').upsert({ id_messaggio: msgId, id_utente: myId, voto: voteValue }, { onConflict: 'id_messaggio, id_utente' });
+    
+    const { data: allVotes } = await supabase.from('bacheca_voti').select('voto').eq('id_messaggio', msgId);
+    let newUp = 0; let newDown = 0;
+    allVotes?.forEach(v => { if (v.voto === 1) newUp++; else if (v.voto === -1) newDown++; });
+
+    await supabase.from('messaggi_bacheca').update({ upvotes: newUp, downvotes: newDown }).eq('id', msgId);
+    setBachecaMessages(prev => prev.map(m => m.id === msgId ? { ...m, upvotes: newUp, downvotes: newDown } : m));
   };
 
   const handlePostBacheca = async () => {
@@ -152,7 +189,7 @@ export default function PaginaProfiloPubblico() {
 
     const { data, error } = await supabase.from('messaggi_bacheca')
       .insert([{ id_profilo: targetUser.id, id_mittente: myId, testo: newBachecaMessage }])
-      .select(`id, testo, creato_il, id_mittente, utenti!fk_mittente (username)`).single();
+      .select(`id, testo, creato_il, id_mittente, upvotes, downvotes, utenti!fk_mittente (username, profili (avatar_url))`).single();
       
     if (error) { alert("Errore: " + error.message); return; }
     
@@ -176,34 +213,47 @@ export default function PaginaProfiloPubblico() {
   const prof = targetUser.profile;
   const initName = targetUser.username.substring(0, 2).toUpperCase();
 
+  // CREAZIONE DINAMICA DEL MENU LATERALE
+  const menuItems = [
+    { nome: 'Bacheca', count: userStats.bacheca }
+  ];
+  if (targetUser.id_ruolo === 1 || targetUser.id_ruolo === 2) {
+    menuItems.push({ nome: 'Articoli', count: writtenArticles.length });
+  }
+  menuItems.push(
+    { nome: 'Seguiti', count: userStats.seguiti },
+    { nome: 'Giochi votati', count: userStats.votati }, 
+    { nome: 'Commenti', count: userStats.commenti }
+  );
+
   return (
     <div className="bg-[#111111] min-h-screen font-sans flex flex-col items-center pb-10">
       
       {/* POPUP SEGNALAZIONE */}
       {showReportModal && (
         <div className="fixed inset-0 bg-black/90 z-[99999] flex items-center justify-center p-4">
-          <div className="bg-[#1a1a1a] w-full max-w-[850px] flex flex-col shadow-2xl border border-gray-800">
+          <div className="bg-[#1a1a1a] w-full max-w-[850px] flex flex-col shadow-2xl border border-gray-800 relative">
+            <button onClick={() => {setShowReportModal(false); setReportReason(''); setReportingMsgId(null);}} className="absolute top-4 right-6 text-gray-500 hover:text-white text-2xl">&times;</button>
             <div className="p-8 text-center pb-6">
-              <h2 className="text-[#ff4444] font-black text-[22px] tracking-widest uppercase">Segnala Utente</h2>
+              <h2 className="text-[#ff4444] font-black text-[22px] tracking-widest uppercase">Segnala {reportingMsgId ? 'Messaggio' : 'Utente'}</h2>
             </div>
-            <div className="px-10 pb-4 text-gray-200 text-[15px] leading-loose flex flex-col gap-4">
-              <p>Se l'utente ti importuna puoi bloccarlo toccando il lucchetto presente nella sua bacheca.</p>
-              <p>In questo modo non potrà inviarti messaggi privati, né citarti nei commenti, non avrà accesso alla tua bacheca e non riceverai alcuna notifica che lo riguarda.</p>
-              <p>Potrai sbloccarlo successivamente nella sezione Blacklist nel tuo profilo personale.</p>
-              <p className="mt-2 text-white font-bold">Se invece vuoi proseguire, allora puoi descrivere il problema e cliccare questo pulsante:</p>
-            </div>
+            {!reportingMsgId && (
+              <div className="px-10 pb-4 text-gray-200 text-[15px] leading-loose flex flex-col gap-4">
+                <p>Se l'utente ti importuna puoi bloccarlo toccando il lucchetto presente nella sua bacheca.</p>
+                <p>In questo modo non potrà inviarti messaggi privati, né citarti nei commenti, non avrà accesso alla tua bacheca e non riceverai alcuna notifica che lo riguarda.</p>
+                <p className="mt-2 text-white font-bold">Se invece vuoi proseguire, allora puoi descrivere il problema e cliccare questo pulsante:</p>
+              </div>
+            )}
             <div className="px-10 pb-6">
                <textarea 
-                 id="report-reason" 
-                 name="report-reason" 
                  value={reportReason} 
                  onChange={(e) => setReportReason(e.target.value)} 
                  placeholder="Motivo della segnalazione (obbligatorio per lo staff)..." 
-                 className="w-full h-20 bg-[#2a2a2a] text-white p-3 outline-none border border-gray-700 focus:border-[#ff2020] resize-none"
+                 className="w-full h-32 bg-[#2a2a2a] text-white p-4 outline-none border border-gray-700 focus:border-[#ff2020] resize-none"
                ></textarea>
             </div>
             <div className="flex justify-between items-center px-10 pb-10">
-              <button onClick={() => setShowReportModal(false)} className="text-[#ff4444] border border-[#ff4444] px-8 py-2.5 text-[14px] font-medium tracking-wide hover:bg-[#ff4444]/10 transition-colors">Chiudi</button>
+              <button onClick={() => {setShowReportModal(false); setReportReason(''); setReportingMsgId(null);}} className="text-[#ff4444] border border-[#ff4444] px-8 py-2.5 text-[14px] font-medium tracking-wide hover:bg-[#ff4444]/10 transition-colors">Chiudi</button>
               <button onClick={eseguiSegnalazione} className="bg-[#ff4444] text-white px-8 py-2.5 text-[14px] font-medium tracking-wide hover:bg-red-600 transition-colors">Segnala</button>
             </div>
           </div>
@@ -212,13 +262,10 @@ export default function PaginaProfiloPubblico() {
 
       <div className="w-full max-w-[1200px] flex flex-col mt-8 shadow-2xl relative">
 
-        {/* HEADER PROFILO */}
         <div className="relative w-full flex flex-col md:flex-row h-auto md:h-[350px] bg-[#1a1a1a]">
           
-          {/* LATO NERO (SINISTRA) - IL CONTENITORE RELATIVE */}
           <div className="w-full md:w-[35%] bg-[#0f0f0f] flex flex-col items-center justify-center py-10 border-b md:border-b-0 border-gray-800 relative z-20 shadow-[10px_0_20px_rgba(0,0,0,0.5)]">
             
-            {/* I TRE BOTTONI SUL CONFINE ESATTO */}
             <div className="absolute bottom-0 translate-y-1/2 md:bottom-auto md:top-1/2 md:-translate-y-1/2 md:right-0 md:translate-x-1/2 flex flex-row md:flex-col gap-3 z-[999] pointer-events-auto">
               
               <button onClick={clickMessaggio} className="w-9 h-9 bg-[#ff4444] rounded-full flex items-center justify-center text-white hover:scale-110 transition-transform shadow-[0_0_10px_rgba(0,0,0,0.5)] cursor-pointer border-none" title="Invia Messaggio">
@@ -237,7 +284,6 @@ export default function PaginaProfiloPubblico() {
                     <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
                   )}
                 </button>
-                {/* TOOLTIP SBLOCCA - CON FRECCETTA E RIVOLTO A DESTRA */}
                 {hasBlocked && (
                   <div className="absolute hidden md:flex left-full ml-3 top-1/2 -translate-y-1/2 bg-[#ff2020] text-white px-3 py-1.5 text-xs font-bold whitespace-nowrap rounded-sm opacity-0 group-hover/lock:opacity-100 pointer-events-none z-0 transition-opacity">
                     <div className="absolute top-1/2 -left-1 -translate-y-1/2 w-0 h-0 border-t-4 border-t-transparent border-r-4 border-r-[#ff2020] border-b-4 border-b-transparent"></div>
@@ -274,7 +320,6 @@ export default function PaginaProfiloPubblico() {
             </div>
           </div>
           
-          {/* LATO GRIGIO (DESTRA) */}
           <div className="w-full md:w-[65%] bg-[#c2c2c2] relative overflow-hidden flex items-center justify-center h-[200px] md:h-full z-0">
             <div className="absolute inset-0 flex flex-wrap justify-around items-center opacity-30 pointer-events-none p-4">
               {Array.from({ length: 15 }).map((_, i) => <span key={i} className="text-white text-7xl font-black italic mr-8 mb-8">m</span>)}
@@ -282,7 +327,6 @@ export default function PaginaProfiloPubblico() {
           </div>
         </div>
 
-        {/* CORPO INFERIORE */}
         <div className="flex flex-col md:flex-row min-h-[500px]">
           {hasBlocked ? (
             <div className="w-full bg-[#1a1a1a] p-20 text-center flex flex-col items-center justify-center border-t border-r border-gray-800">
@@ -292,47 +336,52 @@ export default function PaginaProfiloPubblico() {
             </div>
           ) : (
             <div className="w-full md:w-[70%] bg-[#1a1a1a] p-6 md:p-10 border-r border-t border-gray-800">
-              <h2 className="text-2xl font-black text-white uppercase tracking-tight mb-8">Bacheca</h2>
-              <ProfiloBacheca 
-                bachecaMessages={bachecaMessages} 
-                newBachecaMessage={newBachecaMessage} 
-                setNewBachecaMessage={setNewBachecaMessage} 
-                handlePostBacheca={handlePostBacheca} 
-                formattaDataBacheca={formattaData} 
-                placeholderText={`Lascia un commento sulla bacheca di ${targetUser.username}...`}
-              />
+              
+              {/* RENDERIZZAZIONE DINAMICA DEI TAB */}
+              {activeTab === 'Bacheca' && (
+                <ProfiloBacheca 
+                  bachecaMessages={bachecaMessages} 
+                  newBachecaMessage={newBachecaMessage} 
+                  setNewBachecaMessage={setNewBachecaMessage} 
+                  handlePostBacheca={handlePostBacheca} 
+                  formattaDataBacheca={formattaData} 
+                  sortBacheca={sortBacheca}
+                  setSortBacheca={setSortBacheca}
+                  handleVoteBacheca={handleVoteBacheca}
+                  onOpenReport={(id) => {setReportingMsgId(id); setShowReportModal(true);}}
+                />
+              )}
+              
+              {activeTab === 'Articoli' && <ProfiloArticoli articles={writtenArticles} />}
+              
+              {activeTab !== 'Bacheca' && activeTab !== 'Articoli' && (
+                 <div className="text-center py-20">
+                   <h2 className="text-2xl font-black text-white uppercase tracking-tight mb-4">{activeTab}</h2>
+                   <p className="text-gray-500 font-bold">I dati di questa sezione sono privati o in lavorazione.</p>
+                 </div>
+              )}
+              
             </div>
           )}
 
-          {/* SIDEBAR STATISTICHE DESTRA */}
+          {/* SIDEBAR CON BOTTONI CLICCABILI */}
           <div className="w-full md:w-[30%] bg-[#222222] p-6 border-t border-gray-800">
             <ul className="flex flex-col gap-1">
-              <li>
-                <div className="w-full flex items-center justify-between px-2 py-3 border-b border-gray-800/50">
-                  <span className="text-[13px] font-semibold text-[#ff4444]">Bacheca</span>
-                  <span className="bg-[#e6c200] text-black text-[10px] font-black px-2 py-0.5 rounded-sm">{userStats.bacheca}</span>
-                </div>
-              </li>
-              <li>
-                <div className="w-full flex items-center justify-between px-2 py-3 border-b border-gray-800/50">
-                  <span className="text-[13px] font-semibold text-[#ff4444]">Seguiti</span>
-                  <span className="bg-[#e6c200] text-black text-[10px] font-black px-2 py-0.5 rounded-sm">{userStats.seguiti}</span>
-                </div>
-              </li>
-              <li>
-                <div className="w-full flex items-center justify-between px-2 py-3 border-b border-gray-800/50">
-                  <span className="text-[13px] font-semibold text-[#ff4444]">Giochi votati</span>
-                  <span className="bg-[#e6c200] text-black text-[10px] font-black px-2 py-0.5 rounded-sm">{userStats.votati}</span>
-                </div>
-              </li>
-              <li>
-                <div className="w-full flex items-center justify-between px-2 py-3">
-                  <span className="text-[13px] font-semibold text-[#ff4444]">Commenti</span>
-                  <span className="bg-[#e6c200] text-black text-[10px] font-black px-2 py-0.5 rounded-sm">{userStats.commenti}</span>
-                </div>
-              </li>
+              {menuItems.map((item, index) => (
+                <li key={index}>
+                  <button onClick={() => setActiveTab(item.nome)} className="w-full flex items-center justify-between px-2 py-3 border-b border-gray-800/50 hover:bg-white/5 transition-colors group cursor-pointer outline-none">
+                    <span className={`text-[13px] font-semibold transition-colors ${activeTab === item.nome ? 'text-[#ff4444]' : 'text-[#ff4444] opacity-90 group-hover:text-[#ff4444]'}`}>
+                      {item.nome}
+                    </span>
+                    <span className="bg-[#e6c200] text-black text-[10px] font-black px-2 py-0.5 rounded-sm">
+                      {item.count}
+                    </span>
+                  </button>
+                </li>
+              ))}
             </ul>
           </div>
+          
         </div>
       </div>
     </div>

@@ -10,13 +10,18 @@ import ProfiloVotati from '../components/profilo/ProfiloVotati';
 import ProfiloSalvati from '../components/profilo/ProfiloSalvati';
 import ProfiloCommenti from '../components/profilo/ProfiloCommenti';
 import ProfiloBlacklist from '../components/profilo/ProfiloBlacklist';
+import ProfiloAmmonizioni from '../components/profilo/ProfiloAmmonizioni';
+import ProfiloArticoli from '../components/profilo/ProfiloArticoli'; // IL NUOVO COMPONENTE
 
 export default function PaginaProfilo() {
-  const { user } = useAuth();
+  const { user, openModal } = useAuth(); 
   const navigate = useNavigate();
   const location = useLocation();
   const [activeTab, setActiveTab] = useState(location.state?.tab || 'Bacheca');
   
+  const [userRole, setUserRole] = useState(null); // STATO PER IL RUOLO UTENTE
+  const [writtenArticles, setWrittenArticles] = useState([]); // STATO PER GLI ARTICOLI SCRITTI
+
   const [userComments, setUserComments] = useState([]);
   const [followedGames, setFollowedGames] = useState([]);
   const [followedEvents, setFollowedEvents] = useState([]);
@@ -28,13 +33,33 @@ export default function PaginaProfilo() {
   const [bachecaMessages, setBachecaMessages] = useState([]);
   const [newBachecaMessage, setNewBachecaMessage] = useState('');
 
+  const [ammonizioni, setAmmonizioni] = useState(0);
+  const [bannato, setBannato] = useState(false);
+
+  const [sortBacheca, setSortBacheca] = useState('recenti');
+  const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [reportText, setReportText] = useState('');
+  const [reportingMsgId, setReportingMsgId] = useState(null);
+  const [isReporting, setIsReporting] = useState(false);
+
   const [loading, setLoading] = useState(true);
   const [userDataId, setUserDataId] = useState(null);
-  
-  // STATO PER L'AVATAR
   const [avatarUrl, setAvatarUrl] = useState('');
 
-  useEffect(() => { window.scrollTo(0, 0); }, []);
+  useEffect(() => {
+    if (bachecaMessages.length > 0 && window.location.hash.startsWith('#msg-')) {
+      const element = document.querySelector(window.location.hash);
+      if (element) {
+        setTimeout(() => {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          element.classList.add('bg-white/10', 'transition-colors', 'duration-1000');
+          setTimeout(() => element.classList.remove('bg-white/10'), 2000);
+        }, 300);
+      }
+    } else if (bachecaMessages.length === 0) {
+      window.scrollTo(0, 0);
+    }
+  }, [bachecaMessages, location.hash]);
 
   const username = user?.user_metadata?.username || user?.email?.split('@')[0] || "UtenteSconosciuto";
 
@@ -43,15 +68,28 @@ export default function PaginaProfilo() {
       if (!user) return;
       setLoading(true);
 
-      const { data: userData } = await supabase.from('utenti').select('id').eq('id_auth', user.id).maybeSingle();
+      const { data: userData } = await supabase.from('utenti').select('id, ammonizioni, bannato, id_ruolo').eq('id_auth', user.id).maybeSingle();
 
       if (userData) {
         setUserDataId(userData.id);
+        setUserRole(userData.id_ruolo);
+        setAmmonizioni(userData.ammonizioni || 0);
+        setBannato(userData.bannato || false);
         
-        // Peschiamo l'avatar
         const { data: profileData } = await supabase.from('profili').select('avatar_url').eq('id_utente', userData.id).maybeSingle();
         if (profileData) setAvatarUrl(profileData.avatar_url);
         
+        // RECUPERA ARTICOLI SOLO SE AMMINISTRATORE O REDATTORE
+        if (userData.id_ruolo === 1 || userData.id_ruolo === 2) {
+          const { data: artData } = await supabase
+            .from('articoli')
+            .select('id, titolo, sommario, url_immagine, creato_il, categorie(nome)')
+            .eq('id_autore', userData.id)
+            .eq('stato', 'PUBLISHED')
+            .order('creato_il', { ascending: false });
+          if (artData) setWrittenArticles(artData);
+        }
+
         const { data: commentsData } = await supabase.from('commenti').select(`id, testo, data, id_articolo, articoli ( titolo )`).eq('id_utente', userData.id).order('data', { ascending: false });
         if (commentsData) setUserComments(commentsData);
 
@@ -73,7 +111,7 @@ export default function PaginaProfilo() {
         const { data: salvatiData } = await supabase.from('articoli_salvati').select(`creato_il, id_articolo, articoli ( id, titolo, url_immagine, categorie(nome) )`).eq('id_utente', userData.id).order('creato_il', { ascending: false });
         if (salvatiData) setSavedArticles(salvatiData);
 
-        const { data: msgData } = await supabase.from('messaggi_bacheca').select(`id, testo, creato_il, id_mittente, utenti!fk_mittente ( username )`).eq('id_profilo', userData.id).order('creato_il', { ascending: false });
+        const { data: msgData } = await supabase.from('messaggi_bacheca').select(`id, testo, creato_il, id_mittente, upvotes, downvotes, utenti!fk_mittente ( username, profili ( avatar_url ) )`).eq('id_profilo', userData.id).order('creato_il', { ascending: false });
         if (msgData) setBachecaMessages(msgData);
 
         const { data: blData } = await supabase.from('blacklist').select('id_bloccato').eq('id_utente', userData.id);
@@ -88,91 +126,95 @@ export default function PaginaProfilo() {
     fetchProfileData();
   }, [user]);
 
-  // Gestione rimozione dai seguiti
-  const handleUnfollow = async (idGioco) => {
-    if (!userDataId) return;
-    setFollowedGames(prev => prev.filter(g => g.id_gioco !== idGioco));
-    await supabase.from('segui_giochi').delete().eq('id_utente', userDataId).eq('id_gioco', idGioco);
-  };
-  const handleUnfollowEvent = async (idPalinsesto) => {
-    if (!userDataId) return;
-    setFollowedEvents(prev => prev.filter(e => e.id_palinsesto !== idPalinsesto));
-    await supabase.from('segui_eventi_live').delete().eq('id_utente', userDataId).eq('id_palinsesto', idPalinsesto);
-  };
-  const handleUnfollowChannel = async (canale) => {
-    if (!userDataId) return;
-    setFollowedChannels(prev => prev.filter(c => c.canale !== canale));
-    await supabase.from('segui_canali').delete().eq('id_utente', userDataId).eq('canale', canale);
+  const handleVoteBacheca = async (msgId, voteValue) => {
+    if (!user) { if (openModal) openModal(); return; }
+    if (bannato) { alert("Il tuo account è bannato. Non puoi votare."); return; }
+    
+    await supabase.from('bacheca_voti').upsert({ id_messaggio: msgId, id_utente: userDataId, voto: voteValue }, { onConflict: 'id_messaggio, id_utente' });
+    
+    const { data: allVotes } = await supabase.from('bacheca_voti').select('voto').eq('id_messaggio', msgId);
+    let newUp = 0; let newDown = 0;
+    allVotes?.forEach(v => { if (v.voto === 1) newUp++; else if (v.voto === -1) newDown++; });
+
+    await supabase.from('messaggi_bacheca').update({ upvotes: newUp, downvotes: newDown }).eq('id', msgId);
+    setBachecaMessages(prev => prev.map(m => m.id === msgId ? { ...m, upvotes: newUp, downvotes: newDown } : m));
   };
 
   const handlePostBacheca = async () => {
     if (!newBachecaMessage.trim() || !userDataId) return;
-    const { data, error } = await supabase.from('messaggi_bacheca').insert([{ id_profilo: userDataId, id_mittente: userDataId, testo: newBachecaMessage }]).select(`id, testo, creato_il, id_mittente, utenti!fk_mittente (username)`).single();
+    const { data, error } = await supabase.from('messaggi_bacheca').insert([{ id_profilo: userDataId, id_mittente: userDataId, testo: newBachecaMessage }]).select(`id, testo, creato_il, id_mittente, upvotes, downvotes, utenti!fk_mittente (username, profili ( avatar_url ))`).single();
     if (!error && data) {
       setBachecaMessages([data, ...bachecaMessages]);
       setNewBachecaMessage('');
     }
   };
 
-  const markAllAsRead = async () => {
-    if (!userDataId) return;
-    await supabase.from('notifiche').update({ letta: true }).eq('id_utente', userDataId);
-    setNotifiche(prev => prev.map(n => ({ ...n, letta: true })));
+  const submitBachecaReport = async () => {
+    if (!reportText.trim() || !userDataId || !reportingMsgId) return;
+    setIsReporting(true);
+    const { error } = await supabase.from('segnalazioni').insert([{ id_segnalatore: userDataId, tipo: 'UTENTE', motivo: `[Segnalazione Messaggio Bacheca ID: ${reportingMsgId}] ${reportText}` }]);
+    setIsReporting(false);
+    if (!error) {
+      alert("Segnalazione inviata con successo alla redazione.");
+      setReportModalOpen(false);
+      setReportText('');
+      setReportingMsgId(null);
+    } else { alert("Errore durante l'invio."); }
   };
 
-  const handleNotificationClick = async (n) => {
-    if (!n.letta) {
-      await supabase.from('notifiche').update({ letta: true }).eq('id', n.id);
-      setNotifiche(prev => prev.map(notif => notif.id === n.id ? { ...notif, letta: true } : notif));
-    }
-    if (n.link) navigate(n.link);
-  };
+  const handleUnfollow = async (idGioco) => { if (!userDataId) return; setFollowedGames(prev => prev.filter(g => g.id_gioco !== idGioco)); await supabase.from('segui_giochi').delete().eq('id_utente', userDataId).eq('id_gioco', idGioco); };
+  const handleUnfollowEvent = async (idPalinsesto) => { if (!userDataId) return; setFollowedEvents(prev => prev.filter(e => e.id_palinsesto !== idPalinsesto)); await supabase.from('segui_eventi_live').delete().eq('id_utente', userDataId).eq('id_palinsesto', idPalinsesto); };
+  const handleUnfollowChannel = async (canale) => { if (!userDataId) return; setFollowedChannels(prev => prev.filter(c => c.canale !== canale)); await supabase.from('segui_canali').delete().eq('id_utente', userDataId).eq('canale', canale); };
+  
+  const markAllAsRead = async () => { if (!userDataId) return; await supabase.from('notifiche').update({ letta: true }).eq('id_utente', userDataId); setNotifiche(prev => prev.map(n => ({ ...n, letta: true }))); };
+  const handleNotificationClick = async (n) => { if (!n.letta) { await supabase.from('notifiche').update({ letta: true }).eq('id', n.id); setNotifiche(prev => prev.map(notif => notif.id === n.id ? { ...notif, letta: true } : notif)); } if (n.link) navigate(n.link); };
+  const handleUnsaveArticle = async (idArticolo) => { if (!userDataId) return; setSavedArticles(prev => prev.filter(a => a.id_articolo !== idArticolo)); await supabase.from('articoli_salvati').delete().eq('id_utente', userDataId).eq('id_articolo', idArticolo); };
+  const handleUnblock = async (idBloccato) => { if (!userDataId) return; setBlacklist(prev => prev.filter(u => u.id !== idBloccato)); await supabase.from('blacklist').delete().eq('id_utente', userDataId).eq('id_bloccato', idBloccato); };
 
-  const handleUnsaveArticle = async (idArticolo) => {
-    if (!userDataId) return;
-    setSavedArticles(prev => prev.filter(a => a.id_articolo !== idArticolo));
-    await supabase.from('articoli_salvati').delete().eq('id_utente', userDataId).eq('id_articolo', idArticolo);
-  };
+  const formattaData = (dataIso) => { if (!dataIso) return ''; return new Date(dataIso).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' }); };
+  const formattaDataBacheca = (dataIso) => { if (!dataIso) return ''; const dateObj = new Date(dataIso); const meseNome = dateObj.toLocaleDateString('it-IT', { month: 'long' }); return `${dateObj.getDate()} ${meseNome.charAt(0).toUpperCase() + meseNome.slice(1)} ${dateObj.getFullYear()}`; };
+  const timeAgo = (dateString) => { const diff = Math.floor((new Date() - new Date(dateString)) / 1000); if (diff < 60) return "Pochi secondi fa"; if (diff < 3600) return `${Math.floor(diff / 60)} minuti fa`; if (diff < 86400) return `${Math.floor(diff / 3600)} ore fa`; if (diff < 2592000) return `${Math.floor(diff / 86400)} giorni fa`; return `${Math.floor(diff / 604800)} settimane fa`; };
 
-  // Funzione per sbloccare l'utente dalla blacklist
-  const handleUnblock = async (idBloccato) => {
-    if (!userDataId) return;
-    setBlacklist(prev => prev.filter(u => u.id !== idBloccato));
-    await supabase.from('blacklist').delete().eq('id_utente', userDataId).eq('id_bloccato', idBloccato);
-  };
-
-  const formattaData = (dataIso) => {
-    if (!dataIso) return '';
-    return new Date(dataIso).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
-  };
-  const formattaDataBacheca = (dataIso) => {
-    if (!dataIso) return '';
-    const dateObj = new Date(dataIso);
-    const meseNome = dateObj.toLocaleDateString('it-IT', { month: 'long' });
-    return `${dateObj.getDate()} ${meseNome.charAt(0).toUpperCase() + meseNome.slice(1)} ${dateObj.getFullYear()}`;
-  };
-  const timeAgo = (dateString) => {
-    const diff = Math.floor((new Date() - new Date(dateString)) / 1000);
-    if (diff < 60) return "Pochi secondi fa";
-    if (diff < 3600) return `${Math.floor(diff / 60)} minuti fa`;
-    if (diff < 86400) return `${Math.floor(diff / 3600)} ore fa`;
-    if (diff < 2592000) return `${Math.floor(diff / 86400)} giorni fa`;
-    return `${Math.floor(diff / 604800)} settimane fa`;
-  };
-
+  // CREAZIONE DINAMICA DEL MENU
   const menuItems = [
-    { nome: 'Bacheca', count: bachecaMessages.length }, { nome: 'Notifiche', count: notifiche.filter(n => !n.letta).length },
-    { nome: 'Messaggi', count: 0 }, { nome: 'Articoli salvati', count: savedArticles.length }, 
-    { nome: 'Seguiti', count: followedGames.length + followedEvents.length + followedChannels.length },
-    { nome: 'Giochi votati', count: votedGames.length }, { nome: 'Blacklist', count: blacklist.length },
-    { nome: 'Ban e Ammonizioni', count: 1 }, { nome: 'Commenti', count: userComments.length },
+    { nome: 'Bacheca', count: bachecaMessages.length }
   ];
 
+  // Se l'utente è Admin(1) o Redattore(2), mostriamo il tab "Articoli"
+  if (userRole === 1 || userRole === 2) {
+    menuItems.push({ nome: 'Articoli', count: writtenArticles.length });
+  }
+
+  // Aggiungiamo il resto dei tab standard
+  menuItems.push(
+    { nome: 'Notifiche', count: notifiche.filter(n => !n.letta).length },
+    { nome: 'Messaggi', count: 0 }, 
+    { nome: 'Articoli salvati', count: savedArticles.length }, 
+    { nome: 'Seguiti', count: followedGames.length + followedEvents.length + followedChannels.length },
+    { nome: 'Giochi votati', count: votedGames.length }, 
+    { nome: 'Blacklist', count: blacklist.length },
+    { nome: 'Ban e Ammonizioni', count: ammonizioni + (bannato ? 1 : 0) }, 
+    { nome: 'Commenti', count: userComments.length }
+  );
+
   return (
-    <div className="bg-[#111111] min-h-screen font-sans flex justify-center pb-10">
+    <div className="bg-[#111111] min-h-screen font-sans flex justify-center pb-10 relative">
+      
+      {reportModalOpen && (
+        <div className="fixed inset-0 bg-black/90 z-[200] flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-[#1a1a1a] w-full max-w-[600px] border border-gray-800 p-8 relative shadow-2xl">
+            <button onClick={() => {setReportModalOpen(false); setReportText('');}} className="absolute top-4 right-4 text-gray-500 hover:text-white text-2xl">&times;</button>
+            <h2 className="text-[#ff2020] font-black text-center text-sm tracking-widest uppercase mb-4">Segnala Messaggio</h2>
+            <textarea value={reportText} onChange={(e) => setReportText(e.target.value)} placeholder="Perché stai segnalando questo messaggio?" className="w-full h-40 bg-[#333333] border-none outline-none text-white p-4 resize-none mb-6 font-medium"></textarea>
+            <div className="flex justify-end">
+              <button onClick={submitBachecaReport} disabled={isReporting || !reportText.trim()} className="bg-[#ff4444] text-white font-bold uppercase tracking-widest px-8 py-3 text-sm hover:bg-red-600 disabled:opacity-50">{isReporting ? 'Invio...' : 'Segnala'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="w-full max-w-[1200px] flex flex-col shadow-2xl mt-8">
         
-        {/* HEADER PROFILO */}
         <div className="flex flex-col md:flex-row h-auto md:h-[350px]">
           <div className="w-full md:w-[35%] bg-[#0f0f0f] flex flex-col items-center justify-center py-10 md:py-0 border-b md:border-b-0 md:border-r border-gray-800 relative z-10">
             <button 
@@ -210,17 +252,31 @@ export default function PaginaProfilo() {
           <div className="w-full md:w-[70%] bg-[#1a1a1a] p-6 md:p-10 border-r border-gray-800">
             {loading ? ( <p className="text-gray-400 text-center py-10 font-bold">Caricamento...</p> ) : (
               <>
-                {activeTab === 'Bacheca' && <ProfiloBacheca bachecaMessages={bachecaMessages} newBachecaMessage={newBachecaMessage} setNewBachecaMessage={setNewBachecaMessage} handlePostBacheca={handlePostBacheca} formattaDataBacheca={formattaDataBacheca} />}
+                {activeTab === 'Bacheca' && (
+                  <ProfiloBacheca 
+                    bachecaMessages={bachecaMessages} 
+                    newBachecaMessage={newBachecaMessage} 
+                    setNewBachecaMessage={setNewBachecaMessage} 
+                    handlePostBacheca={handlePostBacheca} 
+                    formattaDataBacheca={formattaDataBacheca}
+                    sortBacheca={sortBacheca}
+                    setSortBacheca={setSortBacheca}
+                    onOpenReport={(id) => {setReportingMsgId(id); setReportModalOpen(true);}} 
+                    handleVoteBacheca={handleVoteBacheca}
+                  />
+                )}
+                {/* MOSTRA GLI ARTICOLI SOLO SE IL TAB È ATTIVO */}
+                {activeTab === 'Articoli' && <ProfiloArticoli articles={writtenArticles} />}
+
                 {activeTab === 'Notifiche' && <ProfiloNotifiche notifiche={notifiche} markAllAsRead={markAllAsRead} handleNotificationClick={handleNotificationClick} timeAgo={timeAgo} />}
                 {activeTab === 'Seguiti' && (
                   <ProfiloSeguiti followedGames={followedGames} handleUnfollow={handleUnfollow} followedEvents={followedEvents} handleUnfollowEvent={handleUnfollowEvent} followedChannels={followedChannels} handleUnfollowChannel={handleUnfollowChannel} formattaData={formattaData} navigate={navigate} />
                 )}
                 {activeTab === 'Giochi votati' && <ProfiloVotati votedGames={votedGames} navigate={navigate} />}
                 {activeTab === 'Articoli salvati' && <ProfiloSalvati savedArticles={savedArticles} handleUnsaveArticle={handleUnsaveArticle} formattaData={formattaData} navigate={navigate} />}
-                {activeTab === 'Commenti' && <ProfiloCommenti userComments={userComments} username={username} formattaData={formattaData} navigate={navigate} />}
-                
-                {/* QUI HO AGGIUNTO IL COMPONENTE BLACKLIST! */}
+                {activeTab === 'Commenti' && <ProfiloCommenti userComments={userComments} username={username} avatarUrl={avatarUrl} formattaData={formattaData} navigate={navigate} />}
                 {activeTab === 'Blacklist' && <ProfiloBlacklist blacklist={blacklist} handleUnblock={handleUnblock} />}
+                {activeTab === 'Ban e Ammonizioni' && <ProfiloAmmonizioni ammonizioni={ammonizioni} bannato={bannato} />}
               </>
             )}
           </div>

@@ -19,7 +19,7 @@ import PaginaSondaggio from './pages/PaginaSondaggio';
 import PaginaSondaggi from './pages/PaginaSondaggi';
 import PaginaProfiloPubblico from './pages/PaginaProfiloPubblico';
 import PaginaImpostazioni from './pages/PaginaImpostazioni';
-
+import PaginaRegolamento from './pages/PaginaRegolamento';
 export default function App() {
   return (
     <AuthProvider>
@@ -44,7 +44,7 @@ export default function App() {
             <Route path="/sondaggio/:id" element={<PaginaSondaggio />} />
             <Route path="/sondaggi" element={<PaginaSondaggi />} />
             <Route path="/impostazioni" element={<PaginaImpostazioni />} />
-            
+            <Route path="/regolamento" element={<PaginaRegolamento />} />
             {/* Questa è la rotta corretta per il profilo pubblico */}
             <Route path="/utente/:username" element={<PaginaProfiloPubblico />} />
           </Routes>
