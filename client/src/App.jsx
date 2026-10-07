@@ -20,11 +20,15 @@ import PaginaSondaggi from './pages/PaginaSondaggi';
 import PaginaProfiloPubblico from './pages/PaginaProfiloPubblico';
 import PaginaImpostazioni from './pages/PaginaImpostazioni';
 import PaginaRegolamento from './pages/PaginaRegolamento';
+
+// Importa il nuovo Chatbot!
+import ChatbotP5R from './components/ChatbotP5R';
+
 export default function App() {
   return (
     <AuthProvider>
       <Router>
-        <div className="min-h-screen bg-[#141414] text-white font-sans select-none pb-12 relative">
+        <div className="min-h-screen bg-[#141414] text-white font-sans select-none pb-12 relative overflow-hidden">
           <Navbar />
           <LoginModal /> {/* Il popup globale inserito qui */}
           
@@ -48,6 +52,10 @@ export default function App() {
             {/* Questa è la rotta corretta per il profilo pubblico */}
             <Route path="/utente/:username" element={<PaginaProfiloPubblico />} />
           </Routes>
+
+         
+          <ChatbotP5R />
+          
         </div>
       </Router>
     </AuthProvider>
