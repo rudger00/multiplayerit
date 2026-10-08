@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom'; // AGGIUNTO L'IMPORT MANCANTE
 
 const ThumbUp = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg>;
 const ThumbDown = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3"></path></svg>;
@@ -24,7 +25,6 @@ export default function ProfiloBacheca({
     return scoreB - scoreA; 
   });
 
-  // FIX 2: Funzione per Rispondi
   const handleReplyClick = (username) => {
     setNewBachecaMessage(prev => prev ? `${prev} @${username} ` : `@${username} `);
     const inputEl = document.getElementById('bacheca-input');
@@ -34,7 +34,6 @@ export default function ProfiloBacheca({
     }
   };
 
-  // FIX 3: Funzione per il Permalink
   const handlePermalink = (msgId) => {
     const url = `${window.location.origin}/profilo#msg-${msgId}`;
     navigator.clipboard.writeText(url);
@@ -112,7 +111,6 @@ export default function ProfiloBacheca({
           const realScore = (msg.upvotes || 0) - (msg.downvotes || 0);
           const isPositive = realScore >= 0;
 
-          // Estrazione sicura dell'avatar! (FIX 1)
           const profiliData = msg.utenti?.profili;
           const avatarReale = Array.isArray(profiliData) ? profiliData[0]?.avatar_url : profiliData?.avatar_url;
           const avatarFinale = avatarReale || `https://ui-avatars.com/api/?name=${msg.utenti?.username || 'User'}&background=2a2a2a&color=fff`;
@@ -125,7 +123,6 @@ export default function ProfiloBacheca({
                   <div className="relative">
                     <div className="w-12 h-12 rounded-full border-[2px] border-dashed border-gray-500 p-0.5 flex items-center justify-center">
                       <div className="w-full h-full rounded-full overflow-hidden bg-[#222]">
-                        {/* Immagine Profilo aggiornata */}
                         <img src={avatarFinale} alt={msg.utenti?.username} className="w-full h-full object-cover" />
                       </div>
                     </div>
@@ -133,7 +130,16 @@ export default function ProfiloBacheca({
                       48
                     </div>
                   </div>
-                  <span className="text-white font-bold text-[15px]">{msg.utenti?.username || 'Utente'}</span>
+                  
+                  {/* LINK CLICCABILE INSERITO QUI */}
+                  {msg.utenti?.username ? (
+                    <Link to={`/utente/${msg.utenti.username}`} className="text-white font-bold text-[15px] hover:text-[#ff4444] transition-colors">
+                      {msg.utenti.username}
+                    </Link>
+                  ) : (
+                    <span className="text-white font-bold text-[15px]">Utente</span>
+                  )}
+                  
                 </div>
 
                 <div className="flex items-center gap-3">
@@ -154,7 +160,6 @@ export default function ProfiloBacheca({
               
               <div className="flex items-center justify-between text-[13px]">
                 <div className="flex gap-4 text-[#ff4444]">
-                  {/* FIX 2 E 3: Aggiunte funzionalità di Rispondi e Permalink */}
                   <span onClick={() => handleReplyClick(msg.utenti?.username)} className="cursor-pointer hover:text-red-400 transition-colors">Rispondi</span>
                   <span onClick={() => handlePermalink(msg.id)} className="cursor-pointer hover:text-red-400 transition-colors">Permalink</span>
                 </div>

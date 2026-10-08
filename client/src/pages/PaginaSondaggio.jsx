@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
-import { getImg } from '../utils/helpers'; // Ci serve per caricare le immagini delle notizie
+import { getImg } from '../utils/helpers'; 
 import SezioneCommenti from '../components/articolo/SezioneCommenti';
 
 export default function PaginaSondaggio() {
@@ -12,7 +12,7 @@ export default function PaginaSondaggio() {
   
   const [sondaggio, setSondaggio] = useState(null);
   const [opzioni, setOpzioni] = useState([]);
-  const [notizieSidebar, setNotizieSidebar] = useState([]); // Stato per le notizie
+  const [notizieSidebar, setNotizieSidebar] = useState([]); 
   const [loading, setLoading] = useState(true);
   
   const [haVotato, setHaVotato] = useState(false);
@@ -122,7 +122,7 @@ export default function PaginaSondaggio() {
     setIsSubmitting(false);
   };
 
-  const handleVote = async (commentId, voteValue) => { /* Stessa logica standard */
+  const handleVote = async (commentId, voteValue) => {
     if (isBanned) return; if (!user) { openModal(); return; }
     const { data: userData } = await supabase.from('utenti').select('id').eq('id_auth', user.id).maybeSingle();
     if (userData) {
@@ -172,12 +172,6 @@ export default function PaginaSondaggio() {
             </div>
 
             <h3 className="text-white font-black text-xl mb-6">{!haVotato ? "Vota per vedere i risultati." : "Risultati del sondaggio"}</h3>
-
-            <div className="flex justify-end gap-2 border-b border-gray-800 pb-4 mb-6">
-               <div className="w-8 h-8 bg-[#3b5998] flex items-center justify-center text-white cursor-pointer hover:opacity-80 transition-opacity"><span className="font-bold">f</span></div>
-               <div className="w-8 h-8 bg-black flex items-center justify-center text-white cursor-pointer hover:opacity-80 transition-opacity"><span className="font-bold">X</span></div>
-               <div className="w-8 h-8 bg-[#25D366] flex items-center justify-center text-white cursor-pointer hover:opacity-80 transition-opacity"><span className="font-bold">W</span></div>
-            </div>
 
             <div className="flex flex-col gap-5 border-b border-gray-800 pb-8 mb-6">
               {opzioni.map((opz) => {

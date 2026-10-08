@@ -3,7 +3,10 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import ProfiloBacheca from '../components/profilo/ProfiloBacheca';
-import ProfiloArticoli from '../components/profilo/ProfiloArticoli'; // NUOVO IMPORT
+import ProfiloArticoli from '../components/profilo/ProfiloArticoli';
+import ProfiloSeguiti from '../components/profilo/ProfiloSeguiti';
+import ProfiloVotati from '../components/profilo/ProfiloVotati';
+import ProfiloCommenti from '../components/profilo/ProfiloCommenti';
 
 export default function PaginaProfiloPubblico() {
   const { username } = useParams();
@@ -12,12 +15,11 @@ export default function PaginaProfiloPubblico() {
   
   const [targetUser, setTargetUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('Bacheca'); // STATO PER GESTIRE I TAB
+  const [activeTab, setActiveTab] = useState('Bacheca');
   
   const [bachecaMessages, setBachecaMessages] = useState([]);
   const [newBachecaMessage, setNewBachecaMessage] = useState('');
   
-  // NUOVI STATI PER FILTRI E SEGNALAZIONI BACHECA (PER FAR FUNZIONARE IL COMPONENTE)
   const [sortBacheca, setSortBacheca] = useState('recenti');
   const [reportingMsgId, setReportingMsgId] = useState(null);
   const [showReportModal, setShowReportModal] = useState(false);
@@ -28,8 +30,13 @@ export default function PaginaProfiloPubblico() {
 
   const [userStats, setUserStats] = useState({ bacheca: 0, seguiti: 0, votati: 0, commenti: 0 });
   
-  // STATO PER GLI ARTICOLI SCRITTI DALL'UTENTE (SE È REDATTORE)
+  // Stati per i dati estratti
   const [writtenArticles, setWrittenArticles] = useState([]);
+  const [userComments, setUserComments] = useState([]);
+  const [followedGames, setFollowedGames] = useState([]);
+  const [followedEvents, setFollowedEvents] = useState([]);
+  const [followedChannels, setFollowedChannels] = useState([]);
+  const [votedGames, setVotedGames] = useState([]);
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -37,7 +44,6 @@ export default function PaginaProfiloPubblico() {
     async function loadPageData() {
       setLoading(true);
       
-      // 1. Cerca l'utente dal nome
       const { data: tUser } = await supabase
         .from('utenti')
         .select(`id, username, id_ruolo, profili ( avatar_url, gamertag_steam, gamertag_psn, gamertag_xbox )`)
@@ -48,7 +54,7 @@ export default function PaginaProfiloPubblico() {
         const prof = tUser.profili ? (Array.isArray(tUser.profili) ? tUser.profili[0] : tUser.profili) : {};
         setTargetUser({ ...tUser, profile: prof });
 
-        // 2. Carica messaggi bacheca
+        // Bacheca
         const { data: msgData } = await supabase.from('messaggi_bacheca')
           .select(`id, testo, creato_il, id_mittente, upvotes, downvotes, utenti!fk_mittente ( username, profili (avatar_url) )`)
           .eq('id_profilo', tUser.id)
@@ -56,7 +62,7 @@ export default function PaginaProfiloPubblico() {
         
         if (msgData) setBachecaMessages(msgData);
 
-        // NUOVO: SE È REDATTORE O ADMIN (1 o 2), CARICA GLI ARTICOLI
+        // Articoli (se Admin o Redattore)
         if (tUser.id_ruolo === 1 || tUser.id_ruolo === 2) {
           const { data: artData } = await supabase
             .from('articoli')
@@ -67,23 +73,31 @@ export default function PaginaProfiloPubblico() {
           if (artData) setWrittenArticles(artData);
         }
 
-        // 3. Statistiche utente
-        const [ { count: cGiochi }, { count: cEventi }, { count: cCanali }, { count: cVoti }, { count: cCommenti } ] = await Promise.all([
-          supabase.from('segui_giochi').select('*', { count: 'exact', head: true }).eq('id_utente', tUser.id),
-          supabase.from('segui_eventi_live').select('*', { count: 'exact', head: true }).eq('id_utente', tUser.id),
-          supabase.from('segui_canali').select('*', { count: 'exact', head: true }).eq('id_utente', tUser.id),
-          supabase.from('voti_giochi').select('*', { count: 'exact', head: true }).eq('id_utente', tUser.id),
-          supabase.from('commenti').select('*', { count: 'exact', head: true }).eq('id_utente', tUser.id)
-        ]);
+        // Estrazione Dati Reali
+        const { data: commentsData } = await supabase.from('commenti').select(`id, testo, data, id_articolo, articoli ( titolo )`).eq('id_utente', tUser.id).order('data', { ascending: false });
+        if (commentsData) setUserComments(commentsData);
 
+        const { data: seguitiData } = await supabase.from('segui_giochi').select(`creato_il, id_gioco, giochi ( id, titolo, url_immagine )`).eq('id_utente', tUser.id).order('creato_il', { ascending: false });
+        if (seguitiData) setFollowedGames(seguitiData);
+
+        const { data: eventiData } = await supabase.from('segui_eventi_live').select(`id_palinsesto, creato_il, palinsesto(giorno, orario, titolo)`).eq('id_utente', tUser.id).order('creato_il', { ascending: false });
+        if (eventiData) setFollowedEvents(eventiData);
+
+        const { data: canaliData } = await supabase.from('segui_canali').select('*').eq('id_utente', tUser.id).order('creato_il', { ascending: false });
+        if (canaliData) setFollowedChannels(canaliData);
+
+        const { data: votiData } = await supabase.from('voti_giochi').select(`voto, id_gioco, giochi ( id, titolo, url_immagine )`).eq('id_utente', tUser.id);
+        if (votiData) setVotedGames(votiData);
+
+        // Imposta Statistiche basate sulla lunghezza degli array
         setUserStats({
           bacheca: msgData ? msgData.length : 0,
-          seguiti: (cGiochi || 0) + (cEventi || 0) + (cCanali || 0),
-          votati: cVoti || 0,
-          commenti: cCommenti || 0
+          seguiti: (seguitiData?.length || 0) + (eventiData?.length || 0) + (canaliData?.length || 0),
+          votati: votiData?.length || 0,
+          commenti: commentsData?.length || 0
         });
 
-        // 4. Controllo loggato & Blacklist
+        // Controllo loggato & Blacklist
         if (user) {
           const { data: cUser } = await supabase.from('utenti').select('id').eq('id_auth', user.id).maybeSingle();
           if (cUser) {
@@ -164,7 +178,6 @@ export default function PaginaProfiloPubblico() {
     }
   };
 
-  // Funzione Voti Bacheca
   const handleVoteBacheca = async (msgId, voteValue) => {
     if (!user) { openModal(); return; }
     const myId = await getMyId();
@@ -213,7 +226,6 @@ export default function PaginaProfiloPubblico() {
   const prof = targetUser.profile;
   const initName = targetUser.username.substring(0, 2).toUpperCase();
 
-  // CREAZIONE DINAMICA DEL MENU LATERALE
   const menuItems = [
     { nome: 'Bacheca', count: userStats.bacheca }
   ];
@@ -229,7 +241,6 @@ export default function PaginaProfiloPubblico() {
   return (
     <div className="bg-[#111111] min-h-screen font-sans flex flex-col items-center pb-10">
       
-      {/* POPUP SEGNALAZIONE */}
       {showReportModal && (
         <div className="fixed inset-0 bg-black/90 z-[99999] flex items-center justify-center p-4">
           <div className="bg-[#1a1a1a] w-full max-w-[850px] flex flex-col shadow-2xl border border-gray-800 relative">
@@ -337,7 +348,6 @@ export default function PaginaProfiloPubblico() {
           ) : (
             <div className="w-full md:w-[70%] bg-[#1a1a1a] p-6 md:p-10 border-r border-t border-gray-800">
               
-              {/* RENDERIZZAZIONE DINAMICA DEI TAB */}
               {activeTab === 'Bacheca' && (
                 <ProfiloBacheca 
                   bachecaMessages={bachecaMessages} 
@@ -354,17 +364,21 @@ export default function PaginaProfiloPubblico() {
               
               {activeTab === 'Articoli' && <ProfiloArticoli articles={writtenArticles} />}
               
-              {activeTab !== 'Bacheca' && activeTab !== 'Articoli' && (
-                 <div className="text-center py-20">
-                   <h2 className="text-2xl font-black text-white uppercase tracking-tight mb-4">{activeTab}</h2>
-                   <p className="text-gray-500 font-bold">I dati di questa sezione sono privati o in lavorazione.</p>
-                 </div>
+              {activeTab === 'Seguiti' && (
+                <ProfiloSeguiti followedGames={followedGames} followedEvents={followedEvents} followedChannels={followedChannels} formattaData={formattaData} navigate={navigate} />
+              )}
+              
+              {activeTab === 'Giochi votati' && (
+                <ProfiloVotati votedGames={votedGames} navigate={navigate} />
+              )}
+              
+              {activeTab === 'Commenti' && (
+                <ProfiloCommenti userComments={userComments} username={targetUser.username} avatarUrl={prof.avatar_url} formattaData={formattaData} navigate={navigate} />
               )}
               
             </div>
           )}
 
-          {/* SIDEBAR CON BOTTONI CLICCABILI */}
           <div className="w-full md:w-[30%] bg-[#222222] p-6 border-t border-gray-800">
             <ul className="flex flex-col gap-1">
               {menuItems.map((item, index) => (

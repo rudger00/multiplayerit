@@ -15,7 +15,7 @@ export default function PaginaImpostazioni() {
   const [nome, setNome] = useState('');
   const [cognome, setCognome] = useState('');
   const [email, setEmail] = useState('');
-  const [avatarUrl, setAvatarUrl] = useState(''); // <-- NUOVO STATO AVATAR
+  const [avatarUrl, setAvatarUrl] = useState(''); 
   
   const [gamertags, setGamertags] = useState({
     steam: '', psn: '', xbox: '', nintendo: '', epic: '', ubisoft: '', gog: '', stadia: ''
@@ -46,7 +46,7 @@ export default function PaginaImpostazioni() {
         if (profileData) {
           setNome(profileData.nome || ''); 
           setCognome(profileData.cognome || '');
-          setAvatarUrl(profileData.avatar_url || ''); // <-- CARICHIAMO L'URL SALVATO
+          setAvatarUrl(profileData.avatar_url || ''); 
           
           setGamertags({
             steam: profileData.gamertag_steam || '', psn: profileData.gamertag_psn || '', xbox: profileData.gamertag_xbox || '',
@@ -94,7 +94,7 @@ export default function PaginaImpostazioni() {
       await supabase.from('utenti').update({ username }).eq('id', userData.id);
       
       const profileUpdates = {
-        id_utente: userData.id, nome, cognome, avatar_url: avatarUrl, // <-- SALVIAMO L'AVATAR
+        id_utente: userData.id, nome, cognome, avatar_url: avatarUrl, 
         gamertag_steam: gamertags.steam, gamertag_psn: gamertags.psn, gamertag_xbox: gamertags.xbox, gamertag_nintendo: gamertags.nintendo,
         gamertag_epic: gamertags.epic, gamertag_ubisoft: gamertags.ubisoft, gamertag_gog: gamertags.gog, gamertag_stadia: gamertags.stadia,
         social_facebook: socials.facebook, social_x: socials.x, social_instagram: socials.instagram, social_tiktok: socials.tiktok,
@@ -183,7 +183,6 @@ export default function PaginaImpostazioni() {
             </div>
           </section>
 
-          {/* LA NUOVA SEZIONE AVATAR */}
           <section className="bg-[#161616] p-8 border border-gray-800 rounded-sm">
             <h3 className="text-[#ff4444] font-black uppercase tracking-widest mb-6">Il tuo Avatar</h3>
             <div className="flex flex-col md:flex-row items-center gap-6">
@@ -225,10 +224,6 @@ export default function PaginaImpostazioni() {
         </div>
 
         <div className="lg:w-[25%] flex flex-col gap-4">
-          <button className="w-full border border-[#ff4444] text-[#ff4444] font-black uppercase tracking-widest py-3 hover:bg-[#ff4444] hover:text-white transition-colors">
-            Abbonati a Multiplayer.it Plus
-          </button>
-          
           <div className="bg-[#161616] p-4 border border-gray-800 flex flex-col gap-4">
              {menuItems.map((stat, idx) => (
                <div key={idx} className="flex justify-between items-center text-sm">

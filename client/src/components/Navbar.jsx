@@ -4,11 +4,58 @@ import { supabase } from '../supabaseClient';
 import { getImg, getTag, PLATFORMS } from '../utils/helpers';
 import { useAuth } from '../context/AuthContext';
 
+// ICONE GLOBALI
 const SearchIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/></svg>;
 const UserIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16"><path d="M3 14s-1 0-1-1 1-4 6-4 6 3 6 4-1 1-1 1H3zm5-6a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/></svg>;
 const CloseIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="currentColor" viewBox="0 0 16 16"><path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/></svg>;
 const LiveIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" className="mr-1.5" viewBox="0 0 16 16"><path d="M2.678 11.894a1 1 0 0 1 .287.801 10.97 10.97 0 0 1-.398 2c1.395-.323 2.247-.697 2.634-.893a1 1 0 0 1 .71-.074A8.06 8.06 0 0 0 8 14c3.996 0 7-2.807 7-6 0-3.192-3.004-6-7-6S1 4.808 1 8c0 1.468.617 2.83 1.678 3.894zm-.493 3.905a21.682 21.682 0 0 1-.713.129c-.2.032-.352-.176-.273-.362a9.68 9.68 0 0 0 .244-.637l.003-.01c.248-.72.45-1.548.524-2.319C.743 11.37 0 9.76 0 8c0-3.866 3.582-7 8-7s8 3.134 8 7-3.582 7-8 7a9.06 9.06 0 0 1-2.347-.306c-.52.263-1.639.742-3.468 1.105z"/></svg>;
 const PinIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M9.828.722a.5.5 0 0 1 .354.146l4.95 4.95a.5.5 0 0 1 0 .707c-.48.48-1.072.588-1.503.588-.177 0-.335-.018-.46-.039l-3.134 3.134a5.927 5.927 0 0 1 .16 1.013c.046.702-.032 1.687-.72 2.375a.5.5 0 0 1-.707 0l-2.829-2.828-3.182 3.182c-.195.195-1.219.902-1.414.707-.195-.195.512-1.22.707-1.414l3.182-3.182-2.828-2.829a.5.5 0 0 1 0-.707c.688-.688 1.673-.767 2.375-.72a5.922 5.922 0 0 1 1.013.16l3.134-3.133a2.772 2.772 0 0 1-.04-.461c0-.43.108-1.022.589-1.503a.5.5 0 0 1 .353-.146z"/></svg>;
+
+// ICONE ASTRATTE (STILE MULTIPLAYER.IT) - DIMENSIONI RIMPICCIOLITE!
+const SvgGamepad = () => (
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+    <path d="M20 7H4C1.8 7 0 8.8 0 11c0 1.9 1.2 3.5 2.9 3.9.4.1.8-.1 1-.5l1-2.4c.2-.5.7-.9 1.3-.9h11.6c.6 0 1.1.4 1.3.9l1 2.4c.2.4.6.6 1 .5C22.8 14.5 24 12.9 24 11c0-2.2-1.8-4-4-4zM7 11H5v2H4v-2H2v-1h2V8h1v2h2v1zm11 1c-.6 0-1-.4-1-1s.4-1 1-1 1 .4 1 1-.4 1-1 1zm2-2c-.6 0-1-.4-1-1s.4-1 1-1 1 .4 1 1-.4 1-1 1zm-2-2c-.6 0-1-.4-1-1s.4-1 1-1 1 .4 1 1-.4 1-1 1z"/>
+  </svg>
+);
+
+const SvgPS = () => (
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+    <path d="M1 7l5-2v14l-5 2V7z" />
+    <path d="M7 5l2-1v14l-2 1V5z" />
+    <path fillRule="evenodd" clipRule="evenodd" d="M14 6a8 8 0 1 0 0 16 8 8 0 0 0 0-16zM10.5 13.5c0-1 .8-1.5 1.8-1.5h3.4c1 0 1.8.5 1.8 1.5v1.2l1.5 2.3h-8l1.5-2.3v-1.2z" />
+  </svg>
+);
+
+const SvgXbox = () => (
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zM8 7.5l4.5 4.5-2 2L6 9.5l2-2zm5 5.5c1.4 0 2.5 1.1 2.5 2.5v1l1.5 2.5h-2.5l1.5-2.5v-1c0-.8-.7-1.5-1.5-1.5h-1z"/>
+  </svg>
+);
+
+const SvgSwitch = () => (
+  <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor">
+    <path d="M9 3H5c-1.7 0-3 1.3-3 3v12c0 1.7 1.3 3 3 3h4V3zm-3 5c-.8 0-1.5-.7-1.5-1.5S5.2 5 6 5s1.5.7 1.5 1.5S6.8 8 6 8zM19 3h-4v18h4c1.7 0 3-1.3 3-3V6c0-1.7-1.3-3-3-3zm-3 13c-.8 0-1.5-.7-1.5-1.5s.7-1.5 1.5-1.5 1.5.7 1.5 1.5-.7 1.5-1.5 1.5z"/>
+  </svg>
+);
+
+const SvgAndroid = () => (
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+    <path d="M17.6 9.4l1.8-3.1c.1-.2 0-.5-.2-.6-.2-.1-.5 0-.6.2L16.8 9c-1.4-.7-3.1-1-4.8-1s-3.4.3-4.8 1L5.4 5.9c-.1-.2-.4-.3-.6-.2-.2.1-.3.4-.2.6l1.8 3.1C3.7 11 1.9 13.8 1.5 17h21c-.4-3.2-2.2-6-4.9-7.6zM7.5 14c-.6 0-1-.4-1-1s.4-1 1-1 1 .4 1 1-.4 1-1 1zm9 0c-.6 0-1-.4-1-1s.4-1 1-1 1 .4 1 1-.4 1-1 1z"/>
+  </svg>
+);
+
+const SvgApple = () => (
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+    <path d="M15.5 4.5c.8-1 1.4-2.4 1.2-3.8-1.2.1-2.7.8-3.5 1.8-.8.9-1.4 2.3-1.3 3.7 1.4.1 2.7-.7 3.6-1.7zm1.6 3.1c-1.6 0-3.1 1-3.9 1-.8 0-2.1-1-3.4-1-1.8 0-3.4 1-4.3 2.7-1.9 3.3-.5 8.2 1.4 10.9 1 1.3 2.1 2.8 3.5 2.7 1.4-.1 1.9-1 3.5-1 1.7 0 2.1 1 3.6 1 1.5 0 2.5-1.4 3.4-2.7 1.1-1.6 1.6-3.1 1.6-3.2 0-.1-3-1.1-3.1-4.5 0-2.8 2.3-4.1 2.4-4.2-1.3-2-3.5-2.7-4.7-2.7z"/>
+  </svg>
+);
+
+const SvgPC = () => (
+  <svg viewBox="0 0 24 24" width="18" height="18">
+    <circle cx="12" cy="12" r="11" fill="currentColor" />
+    <text x="12" y="16.5" fontSize="11" fontWeight="900" fontFamily="sans-serif" textAnchor="middle" fill="#161616">PC</text>
+  </svg>
+);
 
 export default function Navbar() {
   const navigate = useNavigate();
@@ -157,7 +204,6 @@ export default function Navbar() {
                   </div>
                 </div>
               ))}
-              {/* Pulsante in fondo alla tendina per vedere tutti i risultati */}
               <div 
                 className="p-3 text-center text-[#ff2020] text-[11px] font-black uppercase tracking-widest cursor-pointer hover:bg-white/5 transition-colors"
                 onClick={() => handleSearchSubmit(searchQuery)}
@@ -189,9 +235,53 @@ export default function Navbar() {
           <li className="relative h-full flex items-center" onMouseEnter={() => handleMouseEnter('piattaforme')} onMouseLeave={handleMouseLeave}>
             <button onClick={() => handleToggleLock('piattaforme')} className={`h-full px-3 flex items-center gap-1.5 transition-colors uppercase ${isOpen('piattaforme') ? 'bg-white/10' : 'hover:text-gray-300'}`}><span className="font-black text-sm text-[#ff2020] leading-none mb-0.5">☰</span> {navPlatformLabel}</button>
             {isOpen('piattaforme') && (
-              <div className="absolute top-14 left-0 w-[440px] max-w-[90vw] bg-[#161616] border border-gray-800 shadow-2xl p-5 grid grid-cols-2 gap-x-6 gap-y-4 z-50 text-white select-none">
-                <div className="flex flex-col gap-4"><Link to="/" onClick={closeAll} className="flex items-center gap-3.5 hover:text-[#ff2020] cursor-pointer transition-colors group"><span className="text-xl">🎮</span><span className="font-black text-sm tracking-wide">TUTTE</span></Link><Link to="/ps5" onClick={closeAll} className="flex items-center gap-3.5 hover:text-[#ff2020] cursor-pointer transition-colors group"><span className="text-xl font-black">PS</span><span className="font-black text-sm tracking-wide">PLAYSTATION 5</span></Link><Link to="/xbox-one" onClick={closeAll} className="flex items-center gap-3.5 hover:text-[#ff2020] cursor-pointer transition-colors group"><span className="text-xl font-black">⨂</span><span className="font-black text-sm tracking-wide">XBOX ONE</span></Link><Link to="/nintendo-switch" onClick={closeAll} className="flex items-center gap-3.5 hover:text-[#ff2020] cursor-pointer transition-colors group"><span className="text-xl">🕹</span><span className="font-black text-sm tracking-wide">NINTENDO SWITCH</span></Link><Link to="/android" onClick={closeAll} className="flex items-center gap-3.5 hover:text-[#ff2020] cursor-pointer transition-colors group"><span className="text-xl">🤖</span><span className="font-black text-sm tracking-wide">ANDROID</span></Link></div>
-                <div className="flex flex-col gap-4"><Link to="/pc" onClick={closeAll} className="flex items-center gap-3.5 hover:text-[#ff2020] cursor-pointer transition-colors group"><span className="border border-white/60 rounded px-1 text-[11px] font-black group-hover:border-[#ff2020]">PC</span><span className="font-black text-sm tracking-wide">PC</span></Link><Link to="/ps4" onClick={closeAll} className="flex items-center gap-3.5 hover:text-[#ff2020] cursor-pointer transition-colors group"><span className="text-xl font-black">PS</span><span className="font-black text-sm tracking-wide">PLAYSTATION 4</span></Link><Link to="/xbox-series-x-s" onClick={closeAll} className="flex items-center gap-3.5 hover:text-[#ff2020] cursor-pointer transition-colors group"><span className="text-xl font-black">⨂</span><span className="font-black text-sm tracking-wide">XBOX SERIES X/S</span></Link><Link to="/ios" onClick={closeAll} className="flex items-center gap-3.5 hover:text-[#ff2020] cursor-pointer transition-colors group"><span className="text-xl font-serif"></span><span className="font-black text-sm tracking-wide">IOS</span></Link></div>
+              // MENU RIDOTTO A 360px, GAP PIÙ STRETTI, PADDING MINORE
+              <div className="absolute top-14 left-0 w-[360px] max-w-[90vw] bg-[#161616] border border-gray-800 shadow-2xl p-5 grid grid-cols-2 gap-x-6 gap-y-3 z-50 text-white select-none">
+                
+                {/* COLONNA 1 */}
+                <div className="flex flex-col gap-3">
+                  <Link to="/" onClick={closeAll} className="flex items-center gap-2.5 hover:text-[#ff2020] cursor-pointer transition-colors group">
+                    <span className="flex items-center justify-center w-5 shrink-0 text-gray-200 group-hover:text-[#ff2020] transition-colors"><SvgGamepad /></span>
+                    <span className="font-black text-[10px] tracking-widest mt-0.5">TUTTE</span>
+                  </Link>
+                  <Link to="/ps5" onClick={closeAll} className="flex items-center gap-2.5 hover:text-[#ff2020] cursor-pointer transition-colors group">
+                    <span className="flex items-center justify-center w-5 shrink-0 text-gray-200 group-hover:text-[#ff2020] transition-colors"><SvgPS /></span>
+                    <span className="font-black text-[10px] tracking-widest mt-0.5">PLAYSTATION 5</span>
+                  </Link>
+                  <Link to="/xbox-one" onClick={closeAll} className="flex items-center gap-2.5 hover:text-[#ff2020] cursor-pointer transition-colors group">
+                    <span className="flex items-center justify-center w-5 shrink-0 text-gray-200 group-hover:text-[#ff2020] transition-colors"><SvgXbox /></span>
+                    <span className="font-black text-[10px] tracking-widest mt-0.5">XBOX ONE</span>
+                  </Link>
+                  <Link to="/switch" onClick={closeAll} className="flex items-center gap-2.5 hover:text-[#ff2020] cursor-pointer transition-colors group">
+                    <span className="flex items-center justify-center w-5 shrink-0 text-gray-200 group-hover:text-[#ff2020] transition-colors"><SvgSwitch /></span>
+                    <span className="font-black text-[10px] tracking-widest mt-0.5">NINTENDO SWITCH</span>
+                  </Link>
+                  <Link to="/android" onClick={closeAll} className="flex items-center gap-2.5 hover:text-[#ff2020] cursor-pointer transition-colors group">
+                    <span className="flex items-center justify-center w-5 shrink-0 text-gray-200 group-hover:text-[#ff2020] transition-colors"><SvgAndroid /></span>
+                    <span className="font-black text-[10px] tracking-widest mt-0.5">ANDROID</span>
+                  </Link>
+                </div>
+
+                {/* COLONNA 2 */}
+                <div className="flex flex-col gap-3">
+                  <Link to="/pc" onClick={closeAll} className="flex items-center gap-2.5 hover:text-[#ff2020] cursor-pointer transition-colors group">
+                    <span className="flex items-center justify-center w-5 shrink-0 text-gray-200 group-hover:text-[#ff2020] transition-colors"><SvgPC /></span>
+                    <span className="font-black text-[10px] tracking-widest mt-0.5">PC</span>
+                  </Link>
+                  <Link to="/ps4" onClick={closeAll} className="flex items-center gap-2.5 hover:text-[#ff2020] cursor-pointer transition-colors group">
+                    <span className="flex items-center justify-center w-5 shrink-0 text-gray-200 group-hover:text-[#ff2020] transition-colors"><SvgPS /></span>
+                    <span className="font-black text-[10px] tracking-widest mt-0.5">PLAYSTATION 4</span>
+                  </Link>
+                  <Link to="/xbox-series-x" onClick={closeAll} className="flex items-center gap-2.5 hover:text-[#ff2020] cursor-pointer transition-colors group">
+                    <span className="flex items-center justify-center w-5 shrink-0 text-gray-200 group-hover:text-[#ff2020] transition-colors"><SvgXbox /></span>
+                    <span className="font-black text-[10px] tracking-widest mt-0.5">XBOX SERIES X/S</span>
+                  </Link>
+                  <Link to="/ios" onClick={closeAll} className="flex items-center gap-2.5 hover:text-[#ff2020] cursor-pointer transition-colors group">
+                    <span className="flex items-center justify-center w-5 shrink-0 text-gray-200 group-hover:text-[#ff2020] transition-colors"><SvgApple /></span>
+                    <span className="font-black text-[10px] tracking-widest mt-0.5">IOS</span>
+                  </Link>
+                </div>
+
               </div>
             )}
           </li>
@@ -279,7 +369,7 @@ export default function Navbar() {
                   <span onClick={() => { logout(); closeAll(); }} className="text-[#ff2020] text-[11px] font-black uppercase tracking-widest cursor-pointer hover:text-white transition-colors">Logout</span>
                 </div>
 
-                <div onClick={() => { closeAll(); navigate('/profilo'); }} className="p-5 flex items-center justify-between relative cursor-pointer hover:bg-white/5 transition-colors group">
+                <div onClick={() => { closeAll(); navigate('/profilo'); }} className="p-5 flex items-center justify-between relative cursor-pointer hover:bg-white/5 transition-colors border-b border-gray-800 group">
                   <div className="flex items-center gap-4">
                     <div className="relative group-hover:scale-105 transition-transform">
                       <div className="w-[60px] h-[60px] rounded-full border-[3px] border-gray-600 bg-[#2a2a2a] flex items-center justify-center overflow-hidden">
@@ -298,19 +388,6 @@ export default function Navbar() {
                     </div>
                   </div>
                   <div className="w-8 h-8 rounded-full bg-[#2a2a2a] flex items-center justify-center text-gray-400 cursor-pointer hover:bg-gray-700 transition-colors"><PinIcon /></div>
-                </div>
-
-                <div className="bg-[#d4b94a] text-black py-2.5 px-4 text-center text-[13px] mx-4 rounded-sm cursor-pointer hover:brightness-110 transition-all font-semibold flex items-center justify-center gap-2">
-                  <span className="bg-[#ff2020] text-white italic font-bold px-1 rounded-sm text-[10px] leading-tight">m.it</span> Naviga <strong className="underline decoration-black underline-offset-2">senza pubblicità!</strong>
-                </div>
-
-                <div className="flex items-center justify-between p-4 mt-2 border-b border-gray-800">
-                  <span className="text-white text-[12px] font-bold leading-tight w-24">Modalità di<br/>visualizzazione</span>
-                  <div className="flex items-center gap-4 text-[12px] text-gray-400 font-bold">
-                    <div className="flex items-center gap-1.5 cursor-pointer hover:text-white"><div className="w-4 h-4 rounded-full bg-white"></div> Light</div>
-                    <div className="flex items-center gap-1.5 cursor-pointer text-white"><div className="w-4 h-4 rounded-full border border-gray-500 flex items-center justify-center text-[#ff2020]"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg></div> Auto</div>
-                    <div className="flex items-center gap-1.5 cursor-pointer hover:text-white"><div className="w-4 h-4 rounded-full bg-[#111] border border-gray-600"></div> Dark</div>
-                  </div>
                 </div>
 
                 <div className="flex flex-col p-4 max-h-[220px] overflow-y-auto gap-4">
