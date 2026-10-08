@@ -56,31 +56,72 @@ export default function PaginaGioco() {
   useEffect(() => {
     async function fetchData() {
       setLoading(true);
+      
+      // 1. Scarichiamo i dati base del gioco
       const { data: gameData } = await supabase.from('giochi').select(`*, giochi_generi(generi(nome)), gioco_piattaforma(piattaforme(nome))`).eq('id', parseInt(id)).maybeSingle();
-      if (gameData) setGame(gameData);
 
-      // FILTRO AGGIUNTO QUI SOTTO: .eq('stato', 'PUBLISHED')
+      // 2. Scarichiamo tutti gli articoli legati al gioco (assicurandoci di prendere il campo 'voto')
       const { data: articlesData } = await supabase
         .from('articoli')
-        .select(`id, titolo, url_immagine, creato_il, commenti, categorie(nome)`)
+        .select(`id, titolo, url_immagine, creato_il, commenti, voto, categorie(nome)`)
         .eq('id_gioco', parseInt(id))
         .eq('stato', 'PUBLISHED') 
         .order('creato_il', { ascending: false });
-        
-      if (articlesData) setArticles(articlesData);
 
+      // 3. Scarichiamo tutti i voti dati dagli utenti a questo specifico gioco
+      const { data: votesData } = await supabase
+        .from('voti_giochi')
+        .select('voto')
+        .eq('id_gioco', parseInt(id));
+
+      if (gameData) {
+        
+        // --- CALCOLO VOTO REDAZIONE ---
+        if (articlesData) {
+          setArticles(articlesData);
+          
+          // Invece di controllare il nome della categoria, prendiamo direttamente
+          // tutti gli articoli che hanno un voto salvato maggiore di 0. Molto più sicuro!
+          const recensioniConVoto = articlesData.filter(a => a.voto != null && parseFloat(a.voto) > 0);
+          
+          if (recensioniConVoto.length > 0) {
+            const sommaRedazione = recensioniConVoto.reduce((acc, curr) => acc + parseFloat(curr.voto), 0);
+            gameData.voto_redazione = (sommaRedazione / recensioniConVoto.length).toFixed(1);
+          } else {
+            gameData.voto_redazione = null; // Se non ci sono recensioni, rimane null (mostrerà '-')
+          }
+        }
+
+        // --- CALCOLO VOTO LETTORI ---
+        if (votesData && votesData.length > 0) {
+          const sommaLettori = votesData.reduce((acc, curr) => acc + curr.voto, 0);
+          gameData.voto_lettori = (sommaLettori / votesData.length).toFixed(1);
+          gameData.numero_voti = votesData.length;
+        } else {
+          gameData.voto_lettori = null;
+          gameData.numero_voti = 0;
+        }
+
+        // Salviamo il gioco con i voti calcolati
+        setGame(gameData);
+      }
+
+      // 4. Se l'utente è loggato, recuperiamo il SUO voto e se segue il gioco
       if (user) {
         const { data: userData } = await supabase.from('utenti').select('id').eq('id_auth', user.id).maybeSingle();
         if (userData) {
           const { data: voteData } = await supabase.from('voti_giochi').select('voto').eq('id_gioco', parseInt(id)).eq('id_utente', userData.id).maybeSingle();
           if (voteData) setMyVote(voteData.voto);
+          
           const { data: followData } = await supabase.from('segui_giochi').select('*').eq('id_utente', userData.id).eq('id_gioco', parseInt(id)).maybeSingle();
           if (followData) setIsFollowing(true);
         }
       }
+      
       setLoading(false);
       if (!location.state?.scrollTo) window.scrollTo(0, 0);
     }
+    
     fetchData();
   }, [id, user, location.state]);
 
@@ -182,6 +223,8 @@ export default function PaginaGioco() {
         if (tuttiVoti && tuttiVoti.length > 0) {
           const mediaReale = (tuttiVoti.reduce((acc, curr) => acc + curr.voto, 0) / tuttiVoti.length).toFixed(1);
           await supabase.from('giochi').update({ voto_lettori: mediaReale, numero_voti: tuttiVoti.length }).eq('id', parseInt(id));
+          
+          // Aggiorniamo anche lo stato locale per vedere subito la modifica
           setGame(prev => ({ ...prev, voto_lettori: mediaReale, numero_voti: tuttiVoti.length }));
         }
       }
