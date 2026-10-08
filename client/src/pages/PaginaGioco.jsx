@@ -57,10 +57,8 @@ export default function PaginaGioco() {
     async function fetchData() {
       setLoading(true);
       
-      // 1. Scarichiamo i dati base del gioco
       const { data: gameData } = await supabase.from('giochi').select(`*, giochi_generi(generi(nome)), gioco_piattaforma(piattaforme(nome))`).eq('id', parseInt(id)).maybeSingle();
 
-      // 2. Scarichiamo tutti gli articoli legati al gioco (assicurandoci di prendere il campo 'voto')
       const { data: articlesData } = await supabase
         .from('articoli')
         .select(`id, titolo, url_immagine, creato_il, commenti, voto, categorie(nome)`)
@@ -68,31 +66,23 @@ export default function PaginaGioco() {
         .eq('stato', 'PUBLISHED') 
         .order('creato_il', { ascending: false });
 
-      // 3. Scarichiamo tutti i voti dati dagli utenti a questo specifico gioco
       const { data: votesData } = await supabase
         .from('voti_giochi')
         .select('voto')
         .eq('id_gioco', parseInt(id));
 
       if (gameData) {
-        
-        // --- CALCOLO VOTO REDAZIONE ---
         if (articlesData) {
           setArticles(articlesData);
-          
-          // Invece di controllare il nome della categoria, prendiamo direttamente
-          // tutti gli articoli che hanno un voto salvato maggiore di 0. Molto più sicuro!
           const recensioniConVoto = articlesData.filter(a => a.voto != null && parseFloat(a.voto) > 0);
-          
           if (recensioniConVoto.length > 0) {
             const sommaRedazione = recensioniConVoto.reduce((acc, curr) => acc + parseFloat(curr.voto), 0);
             gameData.voto_redazione = (sommaRedazione / recensioniConVoto.length).toFixed(1);
           } else {
-            gameData.voto_redazione = null; // Se non ci sono recensioni, rimane null (mostrerà '-')
+            gameData.voto_redazione = null;
           }
         }
 
-        // --- CALCOLO VOTO LETTORI ---
         if (votesData && votesData.length > 0) {
           const sommaLettori = votesData.reduce((acc, curr) => acc + curr.voto, 0);
           gameData.voto_lettori = (sommaLettori / votesData.length).toFixed(1);
@@ -102,11 +92,9 @@ export default function PaginaGioco() {
           gameData.numero_voti = 0;
         }
 
-        // Salviamo il gioco con i voti calcolati
         setGame(gameData);
       }
 
-      // 4. Se l'utente è loggato, recuperiamo il SUO voto e se segue il gioco
       if (user) {
         const { data: userData } = await supabase.from('utenti').select('id').eq('id_auth', user.id).maybeSingle();
         if (userData) {
@@ -141,40 +129,48 @@ export default function PaginaGioco() {
     setLoadingFollow(false);
   };
 
+  // --------------------------------------------------------
+  // CHIAMATA API YOUTUBE TRAMITE IL NOSTRO BACKEND (SICURO)
+  // --------------------------------------------------------
   useEffect(() => {
     async function fetchYouTubeVideos() {
       if (youtubeVideos.length === 0 && game) {
         setLoadingVideos(true);
-        const API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY || ''; 
         const query = encodeURIComponent(`${game.titolo} official trailer ita`);
         try {
-          const res = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${query}&maxResults=5&type=video&key=${API_KEY}`);
+          const res = await fetch(`http://localhost:3001/api/youtube/search?query=${query}`);
           const data = await res.json();
           if (data.items && data.items.length > 0) {
             setYoutubeVideos(data.items);
             setMainVideo(data.items[0]);
           }
-        } catch (error) { console.error("Errore fetch YouTube"); }
+        } catch (error) { 
+          console.error("Errore fetch YouTube dal backend"); 
+        }
         setLoadingVideos(false);
       }
     }
     fetchYouTubeVideos();
   }, [game, youtubeVideos.length]);
 
+  // --------------------------------------------------------
+  // CHIAMATA API UNSPLASH TRAMITE IL NOSTRO BACKEND (SICURO)
+  // --------------------------------------------------------
   useEffect(() => {
     async function fetchGameImages() {
       if (activeTab === 'video' && gameImages.length === 0 && game) {
         setLoadingImages(true);
         try {
-          const UNSPLASH_KEY = import.meta.env.VITE_UNSPLASH_API_KEY || '';
-          if (!UNSPLASH_KEY) throw new Error("Chiave API Unsplash non trovata");
           const keyword = encodeURIComponent(`${game.titolo} video game`);
-          const res = await fetch(`https://api.unsplash.com/search/photos?query=${keyword}&per_page=6&client_id=${UNSPLASH_KEY}`);
+          const res = await fetch(`http://localhost:3001/api/unsplash/search?query=${keyword}`);
           const data = await res.json();
+          
           if (data.results && data.results.length >= 6) {
             setGameImages(data.results.map(photo => photo.urls.regular));
             setTotalImages(data.total || 35);
-          } else throw new Error("Immagini non sufficienti");
+          } else {
+            throw new Error("Immagini non sufficienti");
+          }
         } catch (error) {
           const fallbackImg = getImg(game.url_immagine);
           setGameImages([fallbackImg, fallbackImg, fallbackImg, fallbackImg, fallbackImg, fallbackImg]);
@@ -223,8 +219,6 @@ export default function PaginaGioco() {
         if (tuttiVoti && tuttiVoti.length > 0) {
           const mediaReale = (tuttiVoti.reduce((acc, curr) => acc + curr.voto, 0) / tuttiVoti.length).toFixed(1);
           await supabase.from('giochi').update({ voto_lettori: mediaReale, numero_voti: tuttiVoti.length }).eq('id', parseInt(id));
-          
-          // Aggiorniamo anche lo stato locale per vedere subito la modifica
           setGame(prev => ({ ...prev, voto_lettori: mediaReale, numero_voti: tuttiVoti.length }));
         }
       }
