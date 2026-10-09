@@ -1,0 +1,24 @@
+# Dipendenze e output generati
+node_modules/
+client/node_modules/
+server/node_modules/
+client/dist/
+server/dist/
+dist/
+
+# Credenziali e configurazioni locali
+.env
+.env.*
+!.env.example
+client/.env
+client/.env.*
+!client/.env.example
+server/.env
+server/.env.*
+!server/.env.example
+
+# File locali/editor
+*.log
+.DS_Store
+.vscode/
+.idea/
