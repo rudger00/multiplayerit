@@ -1,32 +1,24 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const { Pool } = require('pg');
+
+// Importiamo le nostre rotte divise per file
+const externalRoutes = require('./routes/external');
+const adminRoutes = require('./routes/admin');
 
 const app = express();
 const port = process.env.PORT || 3001;
 
-// Middleware
+// Middleware Base
 app.use(cors());
 app.use(express.json());
 
-// Configurazione Connessione Supabase PostgreSQL
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false } // Fondamentale per le connessioni cloud
-});
+// Montaggio delle Rotte
+// Tutte le richieste che iniziano con /api andranno nei rispettivi file
+app.use('/api', externalRoutes);
+app.use('/api/admin', adminRoutes);
 
-// Endpoint di Test
-app.get('/api/test', async (req, res) => {
-  try {
-    const result = await pool.query('SELECT * FROM articoli');
-    res.json(result.rows);
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).json({ error: 'Errore del server' });
-  }
-});
-
+// Avvio Server
 app.listen(port, () => {
-  console.log(`Server backend in esecuzione sulla porta ${port}`);
+  console.log(`✅ Server backend in esecuzione sulla porta ${port}`);
 });

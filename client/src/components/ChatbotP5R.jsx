@@ -1,20 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { GoogleGenerativeAI } from "@google/generative-ai";
 
-// Modelli provati in ordine: se il primo non è disponibile o è sovraccarico passa al secondo
-const MODELS = ["gemini-3.5-flash-lite", "gemini-3.8-flash"];
-const MAX_ATTEMPTS_PER_MODEL = 2;
-const REQUEST_TIMEOUT_MS = 12000; // limite per ogni singola richiesta
-const TOTAL_TIMEOUT_MS = 30000;   // limite complessivo di tutti i tentativi
-
-const SYSTEM_INSTRUCTION =
-  "Sei Navi (Futaba Sakura) del gioco Persona 5. Sei un'hacker geniale, usi slang da nerd. Rispondi in italiano, max 2 frasi concise.";
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-// Errori temporanei: vale la pena riprovare
-const isRetryable = (err) =>
-  /503|429|500|overloaded|high demand|unavailable|abort|timeout|timed out/i.test(err?.message || "");
+const TOTAL_TIMEOUT_MS = 15000;
 
 export default function ChatbotP5R() {
   const [isOpen, setIsOpen] = useState(false);
@@ -29,106 +15,37 @@ export default function ChatbotP5R() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isTyping]);
 
-  // ==========================================
-  // CERVELLO LOCALE DI EMERGENZA
-  // ==========================================
+  // Cerveletto locale di emergenza (se il server non risponde)
   const getFutabaLocalResponse = (text) => {
     const lowerText = text.toLowerCase();
     if (lowerText.includes('ciao') || lowerText.includes('hey')) return "Mwehehe! Ciao Joker. Rete esterna lenta, ma i miei sistemi locali sono operativi!";
     if (lowerText.includes('come stai')) return "Caffeina al 100%. Sistemi operativi. Sono pronta!";
     if (lowerText.includes('aiuto') || lowerText.includes('problema')) return "Tranquillo, ci penso io a coprirti le spalle.";
-    if (lowerText.includes('morgana') || lowerText.includes('gatto')) return "Quel gatto mi dice di dormire... ma un vero hacker non dorme mai! >:P";
-
-    const fallbacks = [
-      "I server del Meta-Verso fanno i capricci. Riesci a ripetere?",
-      "Kek! Rete sovraccarica. Uso il server di backup del Leblanc.",
-      "Mmh... Interferenze di rete. Dammi un secondo e riprova!"
-    ];
-    return fallbacks[Math.floor(Math.random() * fallbacks.length)];
+    return "Mmh... Interferenze di rete con il Meta-Verso. Riesci a ripetere?";
   };
 
-  // ==========================================
-  // CHIAMATA A GEMINI (singolo tentativo)
-  // ==========================================
-  const callGemini = async (apiKey, modelName, userText) => {
-    const genAI = new GoogleGenerativeAI(apiKey);
-    // I modelli Gemini 3 "ragionano" a lungo di default: per una chat serve il livello basso
-    const generationConfig = { maxOutputTokens: 300 };
-    if (modelName.startsWith("gemini-3")) {
-      generationConfig.thinkingConfig = { thinkingLevel: "low" };
-    }
-
-    const model = genAI.getGenerativeModel(
-      {
-        model: modelName,
-        systemInstruction: SYSTEM_INSTRUCTION,
-        generationConfig
-      },
-      { timeout: REQUEST_TIMEOUT_MS } // se una richiesta si blocca, passa al tentativo successivo
-    );
-
-    let promptText = "Storico:\n";
-    messages.slice(-4).forEach(m => {
-      if (m.id !== 1) promptText += `${m.sender === 'user' ? 'Utente' : 'Navi'}: ${m.text}\n`;
-    });
-    promptText += `Utente: ${userText}\nNavi:`;
-
-    const result = await model.generateContent(promptText);
-    return result.response.text();
-  };
-
-  // ==========================================
-  // RETRY + FALLBACK TRA MODELLI
-  // ==========================================
-  const askWithRetry = async (apiKey, userText) => {
-    let lastError;
-
-    for (const modelName of MODELS) {
-      for (let attempt = 1; attempt <= MAX_ATTEMPTS_PER_MODEL; attempt++) {
-        try {
-          return await callGemini(apiKey, modelName, userText);
-        } catch (err) {
-          lastError = err;
-          console.warn(`Gemini [${modelName}] tentativo ${attempt} fallito:`, err.message);
-
-          // Modello non disponibile (404): passa subito al modello successivo
-          if (/404|no longer available|not found/i.test(err?.message || "")) break;
-
-          // Altri errori non temporanei (es. chiave errata): inutile riprovare
-          if (!isRetryable(err)) throw err;
-
-          if (attempt < MAX_ATTEMPTS_PER_MODEL) {
-            await sleep(1000 * attempt); // attende 1s prima del secondo tentativo
-          }
-        }
-      }
-    }
-    throw lastError;
-  };
-
-  // ==========================================
-  // IA CON TIMER DI SICUREZZA
-  // ==========================================
   const getAIResponse = async (userText) => {
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY?.trim();
-
-    if (!apiKey) {
-      console.error("VITE_GEMINI_API_KEY mancante: controlla il file .env e riavvia npm run dev");
-      return getFutabaLocalResponse(userText);
-    }
-
-    let timerId;
-    const timeoutPromise = new Promise((_, reject) => {
-      timerId = setTimeout(() => reject(new Error('Timeout scaduto')), TOTAL_TIMEOUT_MS);
-    });
-
     try {
-      return await Promise.race([askWithRetry(apiKey, userText), timeoutPromise]);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), TOTAL_TIMEOUT_MS);
+
+      // Chiamiamo IL NOSTRO SERVER sicuro, non Gemini direttamente!
+      const response = await fetch('http://localhost:3001/api/gemini/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages, userText }),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) throw new Error("Errore dal server");
+      
+      const data = await response.json();
+      return data.reply;
     } catch (error) {
-      console.error("Errore Gemini, attivo lo scudo offline:", error.message);
+      console.error("Errore di rete/server, attivo scudo locale:", error.message);
       return getFutabaLocalResponse(userText);
-    } finally {
-      clearTimeout(timerId);
     }
   };
 
@@ -149,29 +66,21 @@ export default function ChatbotP5R() {
 
   return (
     <div className="fixed bottom-6 right-6 z-[9999] font-sans">
-
       {isOpen && (
         <div className="absolute bottom-20 right-0 w-[400px] h-[550px] flex flex-col bg-[#c90000] border-4 border-black shadow-[10px_10px_0px_rgba(0,0,0,0.8)] overflow-hidden animate-fadeIn origin-bottom-right">
-
           <div className="bg-black text-white h-14 relative flex items-center px-4 shrink-0 overflow-hidden border-b-4 border-white transform skew-y-1 origin-top-left z-10">
             <div className="relative z-10 flex items-center justify-between w-full transform -skew-y-1">
               <div className="flex items-center gap-3">
                 <span className="text-[#e60012] text-3xl font-black italic tracking-tighter">IM</span>
-                <h3 className="text-white font-black text-xl italic uppercase tracking-tighter drop-shadow-md">
-                  Phantom_Navi
-                </h3>
+                <h3 className="text-white font-black text-xl italic uppercase tracking-tighter drop-shadow-md">Phantom_Navi</h3>
               </div>
-              <button onClick={() => setIsOpen(false)} className="text-white hover:text-[#e60012] font-black text-3xl transition-colors outline-none pb-1">
-                &times;
-              </button>
+              <button onClick={() => setIsOpen(false)} className="text-white hover:text-[#e60012] font-black text-3xl transition-colors outline-none pb-1">&times;</button>
             </div>
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-6 relative" style={{ backgroundColor: '#c90000', backgroundImage: 'radial-gradient(#b30000 20%, transparent 20%), radial-gradient(#b30000 20%, transparent 20%)', backgroundSize: '20px 20px', backgroundPosition: '0 0, 10px 10px' }}>
-
             {messages.map((msg) => (
               <div key={msg.id} className={`flex w-full ${msg.sender === 'user' ? 'justify-end' : 'justify-start'} relative z-10`}>
-
                 {msg.sender === 'bot' ? (
                   <div className="flex items-start gap-3 w-full max-w-[85%]">
                     <div className="relative shrink-0 mt-2">
@@ -182,24 +91,19 @@ export default function ChatbotP5R() {
                       <div className="absolute -right-4 top-4 w-6 h-4 bg-white transform rotate-12 z-0"></div>
                     </div>
                     <div className="bg-black border-[4px] border-white p-3 transform -skew-x-3 relative z-10 shadow-xl">
-                      <p className="text-white text-[15px] font-bold leading-snug tracking-tight transform skew-x-3 whitespace-pre-wrap">
-                        {msg.text}
-                      </p>
+                      <p className="text-white text-[15px] font-bold leading-snug tracking-tight transform skew-x-3 whitespace-pre-wrap">{msg.text}</p>
                     </div>
                   </div>
                 ) : (
                   <div className="flex items-start justify-end gap-3 w-full max-w-[85%] mt-2">
                     <div className="bg-white border-[4px] border-black p-3 px-5 transform skew-x-3 relative z-10 shadow-xl">
-                      <p className="text-black text-[16px] font-black leading-snug tracking-tight transform -skew-x-3 whitespace-pre-wrap">
-                        {msg.text}
-                      </p>
+                      <p className="text-black text-[16px] font-black leading-snug tracking-tight transform -skew-x-3 whitespace-pre-wrap">{msg.text}</p>
                     </div>
                     <div className="absolute right-0 top-4 w-6 h-4 bg-black transform -rotate-12 -z-10 translate-x-2"></div>
                   </div>
                 )}
               </div>
             ))}
-
             {isTyping && (
               <div className="flex items-start gap-3 w-full max-w-[85%] relative z-10">
                 <div className="relative shrink-0 mt-2">
@@ -218,31 +122,12 @@ export default function ChatbotP5R() {
 
           <div className="bg-black p-4 border-t-4 border-white flex gap-3 items-center relative overflow-hidden z-20">
             <div className="absolute inset-0 opacity-20 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCI+PHBhdGggZD0iTTAgMjBMMjAgMEgwaC0yMHoiIGZpbGw9IiNmZmYiLz48L3N2Zz4=')]"></div>
-
-            <input
-              type="text"
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-              placeholder="Scrivi qui..."
-              className="flex-1 bg-white border-[3px] border-black text-black px-3 py-2 outline-none font-bold placeholder-gray-500 transform skew-x-2 focus:ring-4 focus:ring-[#e60012] relative z-10"
-            />
-            <button
-              onClick={handleSend}
-              disabled={isTyping}
-              className="bg-[#e60012] text-white font-black uppercase italic text-lg px-5 py-1.5 border-[3px] border-white hover:bg-white hover:text-[#e60012] transition-colors transform -skew-x-6 shadow-[3px_3px_0px_#000] relative z-10 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              INVIO
-            </button>
+            <input type="text" value={inputText} onChange={(e) => setInputText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSend()} placeholder="Scrivi qui..." className="flex-1 bg-white border-[3px] border-black text-black px-3 py-2 outline-none font-bold placeholder-gray-500 transform skew-x-2 focus:ring-4 focus:ring-[#e60012] relative z-10" />
+            <button onClick={handleSend} disabled={isTyping} className="bg-[#e60012] text-white font-black uppercase italic text-lg px-5 py-1.5 border-[3px] border-white hover:bg-white hover:text-[#e60012] transition-colors transform -skew-x-6 shadow-[3px_3px_0px_#000] relative z-10 disabled:opacity-50 disabled:cursor-not-allowed">INVIO</button>
           </div>
-
         </div>
       )}
-
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className={`w-16 h-16 border-4 border-white rounded-full flex items-center justify-center shadow-[4px_4px_0px_rgba(0,0,0,0.8)] hover:scale-110 transition-transform relative z-50 group overflow-hidden ${isOpen ? 'bg-black text-white' : 'bg-[#e60012] text-white'}`}
-      >
+      <button onClick={() => setIsOpen(!isOpen)} className={`w-16 h-16 border-4 border-white rounded-full flex items-center justify-center shadow-[4px_4px_0px_rgba(0,0,0,0.8)] hover:scale-110 transition-transform relative z-50 group overflow-hidden ${isOpen ? 'bg-black text-white' : 'bg-[#e60012] text-white'}`}>
         {isOpen ? (
           <span className="font-black text-3xl transition-transform group-hover:rotate-90 pb-1">&times;</span>
         ) : (

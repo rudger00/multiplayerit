@@ -35,21 +35,18 @@ export default function PaginaVideo() {
     if (!isLoadMore) setLoading(true);
     else setLoadingMore(true);
 
-    const API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY || ''; 
-    
     // Costruzione dinamica della query in base ai filtri laterali
     let queryTerms = "videogioco ita";
     if (activePlatform !== 'tutte') queryTerms += ` ${activePlatform}`;
     if (activeCategory !== 'tutte') queryTerms += ` ${activeCategory}`;
     else if (activePlatform === 'tutte') queryTerms += " trailer OR gameplay"; // Default se tutto è 'tutte'
 
+    // CHIAMIAMO IL NOSTRO SERVER, NON YOUTUBE DIRETTAMENTE!
     const query = encodeURIComponent(queryTerms);
-    const maxResults = isLoadMore ? 6 : 10;
-    let url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${query}&maxResults=${maxResults}&type=video&key=${API_KEY}`;
+    let url = `http://localhost:3001/api/youtube/search?query=${query}`;
     
-    if (isLoadMore && nextPageToken) {
-      url += `&pageToken=${nextPageToken}`;
-    }
+    // (Nota: il nostro server backend non gestisce la paginazione con nextPageToken al momento, 
+    // ma la chiamata base per ottenere i primi 5-10 video funzionerà perfettamente)
 
     try {
       const res = await fetch(url);
@@ -69,7 +66,7 @@ export default function PaginaVideo() {
         setMainVideo(null);
       }
     } catch (error) {
-      console.error("Errore fetch YouTube API:", error);
+      console.error("Errore fetch dal nostro server:", error);
     }
 
     setLoading(false);

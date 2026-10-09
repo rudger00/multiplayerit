@@ -44,34 +44,55 @@ export default function SezioneCommenti({
     const { data } = await supabase.from('utenti').select('ammonizioni').eq('id', idUtente).single();
     const current = data?.ammonizioni || 0;
 
-    if (current === 1) {
-      await supabase.from('utenti').update({ ammonizioni: 2, bannato: true }).eq('id', idUtente);
-      await supabase.from('notifiche').insert([{
-        id_utente: idUtente,
-        testo: `⛔ BAN AUTOMATICO: Hai ricevuto il tuo secondo cartellino giallo in un commento. Non puoi più commentare o votare sul sito.`,
-        letta: false
-      }]);
-      alert("L'utente aveva già un cartellino. È stato BANNATO definitivamente.");
-    } else {
-      await supabase.from('utenti').update({ ammonizioni: 1 }).eq('id', idUtente);
-      await supabase.from('notifiche').insert([{
-        id_utente: idUtente,
-        testo: `⚠️ AMMONIZIONE: Hai ricevuto un cartellino giallo dallo staff per un tuo commento. Al prossimo sarai bannato.`,
-        letta: false
-      }]);
-      alert("Utente ammonito con successo.");
+    try {
+      // 1. Recupero il token della sessione attuale di Supabase
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+
+      // 2. Mando la richiesta al server allegando il token per superare il buttafuori
+      await fetch('http://localhost:3001/api/admin/users/warn', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}` 
+        },
+        body: JSON.stringify({ id_utente: idUtente, current_warns: current })
+      });
+
+      if (current === 1) {
+        alert("L'utente aveva già un cartellino. È stato BANNATO definitivamente.");
+      } else {
+        alert("Utente ammonito con successo.");
+      }
+    } catch (error) {
+      console.error("Errore:", error);
+      alert("Errore di connessione al server.");
     }
   };
 
   const handleBan = async (idUtente) => {
     if(!window.confirm("Sei sicuro di voler BANNARE DEFINITIVAMENTE questo utente?")) return;
-    await supabase.from('utenti').update({ bannato: true }).eq('id', idUtente);
-    await supabase.from('notifiche').insert([{
-      id_utente: idUtente,
-      testo: `⛔ SEI STATO BANNATO DEFINITIVAMENTE dallo staff. Non puoi più commentare o votare.`,
-      letta: false
-    }]);
-    alert("Utente bannato dal sito.");
+    
+    try {
+      // 1. Recupero il token
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+
+      // 2. Mando la richiesta sicura
+      await fetch('http://localhost:3001/api/admin/users/toggle-ban', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ id_utente: idUtente, is_banned: false }) 
+      });
+      
+      alert("Utente bannato dal sito.");
+    } catch (error) {
+      console.error("Errore:", error);
+      alert("Errore di connessione al server.");
+    }
   };
 
   const handleReportSubmit = async () => {

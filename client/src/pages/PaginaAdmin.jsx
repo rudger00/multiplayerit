@@ -20,102 +20,46 @@ export default function PaginaAdmin() {
 
   async function checkAdminAndFetchData() {
     if (!user) { navigate('/'); return; }
+    
+    // Controlliamo che sia Admin tramite Supabase (solo lettura)
     const { data: adminData } = await supabase.from('utenti').select('id_ruolo').eq('id_auth', user.id).maybeSingle();
     if (!adminData || adminData.id_ruolo !== 1) {
       alert("Accesso negato. Solo gli Amministratori possono visualizzare questa pagina.");
       navigate('/'); 
       return;
     }
+    
     fetchPendingArticles();
     fetchUsers();
     fetchReports();
     setLoading(false);
   }
 
+  // LETTURA DATI: Rimane su Supabase (Sicura e Veloce)
   async function fetchPendingArticles() {
     const { data } = await supabase.from('articoli').select('id, titolo, creato_il, id_autore, categorie(nome), utenti!id_autore(username)').eq('stato', 'DRAFT').order('creato_il', { ascending: true });
     if (data) setPendingArticles(data);
   }
-
-  const handleApprove = async (art) => {
-    if(window.confirm(`Pubblicare l'articolo "${art.titolo}" online?`)) {
-      await supabase.from('articoli').update({ stato: 'PUBLISHED' }).eq('id', art.id);
-      await supabase.from('notifiche').insert([{ id_utente: art.id_autore, testo: `Complimenti! Il tuo articolo "${art.titolo}" è stato approvato ed è ora online.`, link: `/articolo/${art.id}`, letta: false }]);
-      fetchPendingArticles();
-    }
-  };
-
-  const handleReject = async (art) => {
-    if(window.confirm(`Sei sicuro di voler rifiutare ed eliminare la bozza "${art.titolo}"?`)) {
-      await supabase.from('articoli').delete().eq('id', art.id);
-      await supabase.from('notifiche').insert([{ id_utente: art.id_autore, testo: `La tua bozza "${art.titolo}" non ha superato la revisione ed è stata rimossa.`, link: `/profilo`, letta: false }]);
-      fetchPendingArticles();
-    }
-  };
 
   async function fetchUsers() {
     const { data } = await supabase.from('utenti').select('id, username, id_ruolo, ammonizioni, bannato').order('id', { ascending: true });
     if (data) setUsersList(data);
   }
 
-  const handleWarnUser = async (idUtente, currentWarns) => {
-    if(!window.confirm("Vuoi aggiungere un'ammonizione a questo utente? (Al 2° cartellino verrà bannato)")) return;
-
-    if (currentWarns === 1) {
-      await supabase.from('utenti').update({ ammonizioni: 2, bannato: true }).eq('id', idUtente);
-      await supabase.from('notifiche').insert([{
-        id_utente: idUtente,
-        testo: `⛔ BAN AUTOMATICO: Hai ricevuto il tuo secondo cartellino giallo. Non puoi più commentare o votare.`,
-        letta: false
-      }]);
-    } else {
-      await supabase.from('utenti').update({ ammonizioni: 1 }).eq('id', idUtente);
-      await supabase.from('notifiche').insert([{
-        id_utente: idUtente,
-        testo: `⚠️ ATTENZIONE: Hai ricevuto un'ammonizione dallo staff per violazione del regolamento.`,
-        letta: false
-      }]);
-    }
-    fetchUsers();
-  };
-
-  const handleToggleBan = async (idUtente, isBanned) => {
-    const msg = isBanned ? "Vuoi SBANNARE questo utente?" : "Vuoi BANNARE DEFINITIVAMENTE questo utente?";
-    if(window.confirm(msg)) {
-      await supabase.from('utenti').update({ bannato: !isBanned }).eq('id', idUtente);
-      if (!isBanned) {
-         await supabase.from('notifiche').insert([{
-           id_utente: idUtente,
-           testo: `⛔ SEI STATO BANNATO DEFINITIVAMENTE dallo staff. Non puoi più commentare o votare.`,
-           letta: false
-         }]);
-      }
-      fetchUsers();
-    }
-  };
-
   async function fetchReports() {
     const { data, error } = await supabase.from('segnalazioni').select('*').order('creato_il', { ascending: false });
-    
-    if (error) {
-      console.error("Errore fetch segnalazioni:", error);
-      return;
-    }
+    if (error) return;
 
     const filteredData = data.filter(rep => rep.stato !== 'RISOLTA' && rep.stato !== 'RIFIUTATA');
     
     if (filteredData && filteredData.length > 0) {
-      
-      // FIX: Rimuoviamo i valori null/undefined per evitare crash in Supabase
       const userIds = [...new Set(filteredData.map(r => r.id_segnalatore).filter(Boolean))];
-      
       let usersData = [];
       if (userIds.length > 0) {
         const { data: uData } = await supabase.from('utenti').select('id, username').in('id', userIds);
         if (uData) usersData = uData;
       }
       
-      // Estraiamo ID dei commenti filtrando i null
       const commentIds = [...new Set(filteredData.filter(r => r.tipo === 'COMMENTO').map(r => r.id_commento_segnalato).filter(Boolean))];
       let commentsData = [];
       if (commentIds.length > 0) {
@@ -138,19 +82,102 @@ export default function PaginaAdmin() {
     }
   }
 
+  // ==========================================
+  // AZIONI AMMINISTRATIVE (Richiamano il BACKEND in sicurezza)
+  // ==========================================
+
+  const handleApprove = async (art) => {
+    if(window.confirm(`Pubblicare l'articolo "${art.titolo}" online?`)) {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+
+      await fetch('http://localhost:3001/api/admin/articles/approve', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ id_articolo: art.id, id_autore: art.id_autore, titolo: art.titolo })
+      });
+      fetchPendingArticles();
+    }
+  };
+
+  const handleReject = async (art) => {
+    if(window.confirm(`Sei sicuro di voler rifiutare ed eliminare la bozza "${art.titolo}"?`)) {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+
+      await fetch('http://localhost:3001/api/admin/articles/reject', {
+        method: 'DELETE',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ id_articolo: art.id, id_autore: art.id_autore, titolo: art.titolo })
+      });
+      fetchPendingArticles();
+    }
+  };
+
+  const handleWarnUser = async (idUtente, currentWarns) => {
+    if(!window.confirm("Vuoi aggiungere un'ammonizione a questo utente? (Al 2° cartellino verrà bannato)")) return;
+    
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+
+    await fetch('http://localhost:3001/api/admin/users/warn', {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ id_utente: idUtente, current_warns: currentWarns })
+    });
+    fetchUsers();
+  };
+
+  const handleToggleBan = async (idUtente, isBanned) => {
+    const msg = isBanned ? "Vuoi SBANNARE questo utente?" : "Vuoi BANNARE DEFINITIVAMENTE questo utente?";
+    if(window.confirm(msg)) {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+
+      await fetch('http://localhost:3001/api/admin/users/toggle-ban', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ id_utente: idUtente, is_banned: isBanned })
+      });
+      fetchUsers();
+    }
+  };
+
   const handleUpdateReportStatus = async (id, newStatus) => {
     const action = newStatus === 'RISOLTA' ? 'risolta' : 'rifiutata (ignorata)';
     if(window.confirm(`Vuoi segnare questa segnalazione come ${action}?`)) {
-      await supabase.from('segnalazioni').update({ stato: newStatus }).eq('id', id);
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+
+      await fetch('http://localhost:3001/api/admin/reports/update-status', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ id_segnalazione: id, new_status: newStatus })
+      });
       fetchReports();
     }
   };
 
   if (loading) return <div className="text-white text-center py-20 font-bold">Verifica credenziali Amministratore...</div>;
 
+  // L'INTERFACCIA (HTML/JSX) RIMANE IDENTICA A PRIMA!
   return (
     <div className="bg-[#111111] min-h-screen font-sans pb-20">
-      
       <div className="bg-[#0f0f0f] border-b border-[#ff2020] pt-8 pb-6 shadow-2xl sticky top-0 z-50">
         <div className="max-w-[1200px] mx-auto px-4">
           <h2 className="text-[#ff2020] font-black text-[12px] uppercase tracking-widest mb-1">Pannello di Controllo</h2>
@@ -159,7 +186,6 @@ export default function PaginaAdmin() {
       </div>
 
       <div className="max-w-[1200px] mx-auto px-4 mt-8 flex flex-col md:flex-row gap-8">
-        
         <div className="w-full md:w-[25%] bg-[#1a1a1a] border border-gray-800 p-4 h-fit rounded-sm shadow-xl">
           <div className="flex flex-col gap-2">
             <button onClick={() => setActiveTab('articoli')} className={`text-left px-4 py-3 font-bold text-sm uppercase tracking-widest transition-colors rounded-sm flex justify-between items-center ${activeTab === 'articoli' ? 'bg-[#ff2020] text-white' : 'text-gray-400 hover:bg-white/5'}`}>
@@ -175,7 +201,6 @@ export default function PaginaAdmin() {
         </div>
 
         <div className="w-full md:w-[75%] bg-[#1a1a1a] border border-gray-800 p-6 rounded-sm shadow-xl min-h-[500px]">
-          
           {activeTab === 'articoli' && (
             <div>
               <h2 className="text-white font-black text-2xl uppercase tracking-tight mb-6 border-b border-gray-800 pb-4">Bozze in attesa di revisione</h2>
@@ -256,7 +281,6 @@ export default function PaginaAdmin() {
                     <div key={rep.id} className={`bg-[#222] p-5 border-l-4 ${rep.tipo === 'REDAZIONE' ? 'border-[#9b59b6]' : 'border-[#ff2020]'} flex flex-col md:flex-row justify-between md:items-center gap-4 shadow-md rounded-sm`}>
                       <div className="flex flex-col">
                         <div className="flex items-center gap-2 mb-2">
-                          {/* Colore viola personalizzato per i messaggi alla Redazione */}
                           <span className={`${rep.tipo === 'REDAZIONE' ? 'bg-[#9b59b6]' : 'bg-[#ff2020]'} text-white px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest`}>
                             {rep.tipo}
                           </span>
@@ -287,7 +311,6 @@ export default function PaginaAdmin() {
               )}
             </div>
           )}
-
         </div>
       </div>
     </div>
