@@ -23,6 +23,9 @@ export default function PaginaRicerca() {
   const [isPiattaformeOpen, setIsPiattaformeOpen] = useState(true);
   const [activePlatform, setActivePlatform] = useState('Tutte'); 
 
+  // Variabile d'ambiente per le API backend
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
   const formattaData = (dataIso) => {
     if (!dataIso) return 'N/D';
     const dateObj = new Date(dataIso);
@@ -31,21 +34,28 @@ export default function PaginaRicerca() {
     return `${dateObj.getDate()} ${meseCapitalizzato} ${dateObj.getFullYear()}`;
   };
 
+  // Funzione sicura per decodificare entità HTML (es. &#39; -> ' ) senza usare dangerouslySetInnerHTML
+  const decodeHtmlEntities = (str) => {
+    const textarea = document.createElement("textarea");
+    textarea.innerHTML = str;
+    return textarea.value;
+  };
+
   useEffect(() => {
     const fetchResults = async () => {
       setLoading(true);
       
-      // 1. Ricerca base su Supabase (Risolto l'ERRORE 400 rimuovendo tabelle inesistenti!)
+      // 1. Ricerca base su Supabase
       const [artRes, gioRes] = await Promise.all([
         supabase.from('articoli').select(`*, categorie(nome)`).eq('stato', 'PUBLISHED').ilike('titolo', `%${query}%`).order('creato_il', { ascending: false }),
         supabase.from('giochi').select('*').ilike('titolo', `%${query}%`)
       ]);
 
-      // 2. Ricerca su YouTube tramite IL NOSTRO SERVER sicuro! (Niente più chiavi API esposte)
+      // 2. Ricerca su YouTube tramite IL NOSTRO SERVER sicuro (ora legge API_URL dinamico)
       let ytVideos = [];
       if (query) {
         try {
-          const ytResponse = await fetch(`http://localhost:3001/api/youtube/search?query=${encodeURIComponent(query + ' recensione trailer gameplay')}`);
+          const ytResponse = await fetch(`${API_URL}/api/youtube/search?query=${encodeURIComponent(query + ' recensione trailer gameplay')}`);
           if(ytResponse.ok) {
             const ytData = await ytResponse.json();
             if (ytData.items) {
@@ -147,7 +157,10 @@ export default function PaginaRicerca() {
                         <div className="absolute top-1 right-1 bg-red-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded-sm">▶ YOUTUBE</div>
                       </div>
                       <div className="flex flex-col justify-start">
-                        <h3 className="text-xl font-black uppercase text-gray-100 group-hover:text-gray-300 transition-colors leading-tight mb-1" dangerouslySetInnerHTML={{ __html: item.titolo }}></h3>
+                        {/* Utilizziamo decodeHtmlEntities per stampare in totale sicurezza */}
+                        <h3 className="text-xl font-black uppercase text-gray-100 group-hover:text-gray-300 transition-colors leading-tight mb-1">
+                          {decodeHtmlEntities(item.titolo)}
+                        </h3>
                         <span className="text-[#00bfff] text-[11px] font-black uppercase tracking-widest mb-2">{item.canale}</span>
                         <p className="text-[12px] font-bold text-gray-500 mb-0.5">Pubblicato il: <span className="text-gray-200">{formattaData(item.creato_il)}</span></p>
                       </div>

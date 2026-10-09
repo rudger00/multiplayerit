@@ -53,6 +53,9 @@ export default function PaginaGioco() {
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
+  // Variabile d'ambiente sicura per il backend
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
   useEffect(() => {
     async function fetchData() {
       setLoading(true);
@@ -138,7 +141,8 @@ export default function PaginaGioco() {
         setLoadingVideos(true);
         const query = encodeURIComponent(`${game.titolo} official trailer ita`);
         try {
-          const res = await fetch(`http://localhost:3001/api/youtube/search?query=${query}`);
+          // Utilizzo API_URL dinamico
+          const res = await fetch(`${API_URL}/api/youtube/search?query=${query}`);
           const data = await res.json();
           if (data.items && data.items.length > 0) {
             setYoutubeVideos(data.items);
@@ -162,7 +166,8 @@ export default function PaginaGioco() {
         setLoadingImages(true);
         try {
           const keyword = encodeURIComponent(`${game.titolo} video game`);
-          const res = await fetch(`http://localhost:3001/api/unsplash/search?query=${keyword}`);
+          // Utilizzo API_URL dinamico
+          const res = await fetch(`${API_URL}/api/unsplash/search?query=${keyword}`);
           const data = await res.json();
           
           if (data.results && data.results.length >= 6) {

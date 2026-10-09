@@ -30,7 +30,8 @@ export default function ChatbotP5R() {
       const timeoutId = setTimeout(() => controller.abort(), TOTAL_TIMEOUT_MS);
 
       // Chiamiamo IL NOSTRO SERVER sicuro, non Gemini direttamente!
-      const response = await fetch('http://localhost:3001/api/gemini/chat', {
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+      const response = await fetch(`${API_URL}/api/gemini/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages, userText }),

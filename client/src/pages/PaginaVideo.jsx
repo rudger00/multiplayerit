@@ -30,23 +30,27 @@ export default function PaginaVideo() {
   const [isPiattaformeOpen, setIsPiattaformeOpen] = useState(true);
   const [isCategorieOpen, setIsCategorieOpen] = useState(true);
 
-  // Fetch dei video da YouTube
+  // Variabile d'ambiente sicura per il backend
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
+  // Fetch dei video dal backend
   const fetchVideos = async (isLoadMore = false) => {
     if (!isLoadMore) setLoading(true);
     else setLoadingMore(true);
 
-    // Costruzione dinamica della query in base ai filtri laterali
+    // Costruzione dinamica della query
     let queryTerms = "videogioco ita";
     if (activePlatform !== 'tutte') queryTerms += ` ${activePlatform}`;
     if (activeCategory !== 'tutte') queryTerms += ` ${activeCategory}`;
-    else if (activePlatform === 'tutte') queryTerms += " trailer OR gameplay"; // Default se tutto è 'tutte'
+    else if (activePlatform === 'tutte') queryTerms += " trailer OR gameplay";
 
-    // CHIAMIAMO IL NOSTRO SERVER, NON YOUTUBE DIRETTAMENTE!
     const query = encodeURIComponent(queryTerms);
-    let url = `http://localhost:3001/api/youtube/search?query=${query}`;
     
-    // (Nota: il nostro server backend non gestisce la paginazione con nextPageToken al momento, 
-    // ma la chiamata base per ottenere i primi 5-10 video funzionerà perfettamente)
+    // Costruiamo l'URL agganciando anche il pageToken se stiamo caricando "altri" video
+    let url = `${API_URL}/api/youtube/search?query=${query}`;
+    if (isLoadMore && nextPageToken) {
+      url += `&pageToken=${nextPageToken}`;
+    }
 
     try {
       const res = await fetch(url);
@@ -58,27 +62,28 @@ export default function PaginaVideo() {
         if (isLoadMore) {
           setVideos(prev => [...prev, ...data.items]);
         } else {
-          setVideos(data.items.slice(1)); // I restanti vanno nella griglia
-          setMainVideo(data.items[0]);    // Il primo diventa il main
+          setVideos(data.items.slice(1));
+          setMainVideo(data.items[0]);
         }
       } else if (!isLoadMore) {
         setVideos([]);
         setMainVideo(null);
+        setNextPageToken(null);
       }
     } catch (error) {
-      console.error("Errore fetch dal nostro server:", error);
+      console.error("Errore fetch dal server backend:", error);
     }
 
     setLoading(false);
     setLoadingMore(false);
   };
 
-  // Ricarica i video ogni volta che cambia un filtro
   useEffect(() => {
     fetchVideos(false);
     window.scrollTo(0, 0);
   }, [activePlatform, activeCategory]);
 
+  // Decodifica sicura HTML Entities (es: &#39;) senza usare dangerouslySetInnerHTML
   const decodeHtmlEntities = (str) => {
     const textarea = document.createElement("textarea");
     textarea.innerHTML = str;
@@ -108,8 +113,8 @@ export default function PaginaVideo() {
                 <div className="w-full aspect-video bg-black relative mb-6 shadow-2xl border border-gray-800 rounded-sm overflow-hidden">
                   <iframe 
                     className="w-full h-full" 
-                    src={`https://www.youtube.com/embed/${mainVideo.id.videoId}?autoplay=1&mute=1`} 
-                    title={mainVideo.snippet.title} 
+                    src={`https://www.youtube.com/embed/${mainVideo.id?.videoId}?autoplay=1&mute=1`} 
+                    title={decodeHtmlEntities(mainVideo.snippet.title)} 
                     frameBorder="0" 
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
                     allowFullScreen
@@ -118,31 +123,35 @@ export default function PaginaVideo() {
 
                 {/* GRIGLIA VIDEO SECONDARI */}
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
-                  {videos.map((vid) => (
-                    <div 
-                      key={vid.id.videoId} 
-                      className="flex flex-col cursor-pointer group"
-                      onClick={() => {
-                        window.scrollTo({ top: 0, behavior: 'smooth' });
-                        setMainVideo(vid);
-                      }}
-                    >
-                      <div className="w-full aspect-video relative rounded-sm overflow-hidden border border-gray-800 group-hover:border-[#ff2020] transition-colors mb-2">
-                        <img 
-                          src={vid.snippet.thumbnails.medium.url} 
-                          alt={vid.snippet.title} 
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        />
-                        {/* Overlay scuro con Play giallo (stile screenshot) */}
-                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity group-hover:bg-black/20">
-                          <PlayIcon />
+                  {videos.map((vid) => {
+                    // Controllo di sicurezza: se per qualche motivo l'ID del video manca, nascondiamo l'elemento
+                    if (!vid.id || !vid.id.videoId) return null;
+                    
+                    return (
+                      <div 
+                        key={vid.id.videoId} 
+                        className="flex flex-col cursor-pointer group"
+                        onClick={() => {
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                          setMainVideo(vid);
+                        }}
+                      >
+                        <div className="w-full aspect-video relative rounded-sm overflow-hidden border border-gray-800 group-hover:border-[#ff2020] transition-colors mb-2">
+                          <img 
+                            src={vid.snippet.thumbnails?.medium?.url || ''} 
+                            alt={decodeHtmlEntities(vid.snippet.title)} 
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          />
+                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity group-hover:bg-black/20">
+                            <PlayIcon />
+                          </div>
                         </div>
+                        <h3 className="text-gray-200 text-[12px] font-bold leading-snug line-clamp-3 group-hover:text-[#ff2020] transition-colors">
+                          {decodeHtmlEntities(vid.snippet.title)}
+                        </h3>
                       </div>
-                      <h3 className="text-gray-200 text-[12px] font-bold leading-snug line-clamp-3 group-hover:text-[#ff2020] transition-colors">
-                        {decodeHtmlEntities(vid.snippet.title)}
-                      </h3>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 {/* TASTO MOSTRA ALTRI */}
