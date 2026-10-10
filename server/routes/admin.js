@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const supabase = require('../config/db'); // Assicurati che il percorso al tuo db.js sia corretto
-const requireAdmin = require('../middleware/auth'); // Il buttafuori JWT
+const { requireAdmin } = require('../middleware/auth');
 
 // Tutte le rotte in questo file devono passare dal buttafuori
 router.use(requireAdmin);
