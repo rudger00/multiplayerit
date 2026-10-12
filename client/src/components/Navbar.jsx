@@ -171,7 +171,9 @@ export default function Navbar() {
   const isAdmin = userRole === 1;
 
   return (
-    <nav className="sticky top-0 w-full flex items-center justify-between bg-[#1a1a1a] h-14 border-b border-gray-800 z-[100] shadow-sm max-w-[100vw]">
+    <>
+      {/* Navbar fissata in alto: resta visibile mentre l’utente scorre la pagina. */}
+      <nav className="fixed top-0 left-0 w-full flex items-center justify-between bg-[#1a1a1a] h-14 border-b border-gray-800 z-[100] shadow-sm max-w-[100vw]">
       <div className="flex items-center h-full">
         <Link to="/" className="flex items-center h-full px-4 shrink-0" onClick={closeAll}>
           <span className="text-[22px] font-bold italic tracking-tighter cursor-pointer text-white lowercase">multiplayer<span className="text-[#ff2020]">.it</span></span>
@@ -410,6 +412,11 @@ export default function Navbar() {
           </div>
         </div>
       )}
-    </nav>
+      </nav>
+
+      {/* Riserva lo spazio della navbar (h-14 = 56px), evitando che il contenuto
+          della pagina inizi dietro alla barra fissa. */}
+      <div className="h-14 w-full shrink-0" aria-hidden="true" />
+    </>
   );
 }

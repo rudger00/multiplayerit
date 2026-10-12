@@ -112,45 +112,54 @@ export default function PaginaArticolo() {
     fetchData();
   }, [id, user, navigate]); 
 
-  // --- EFFETTO PER LA READING PROGRESS BAR ---
+  // --- EFFETTO PER LA BARRA DI AVANZAMENTO DELLA LETTURA ---
   useEffect(() => {
     const handleScroll = () => {
-      if (!articleContentRef.current) return;
+      const articleElement = articleContentRef.current;
 
-      const windowHeight = window.innerHeight;
+      // Se il contenuto non è ancora montato, non c'è nulla da calcolare.
+      if (!articleElement) return;
+
+      // getBoundingClientRect() restituisce la posizione visibile; sommando scrollY
+      // otteniamo la posizione dell'articolo rispetto all'inizio del documento.
+      const articleTop =
+        articleElement.getBoundingClientRect().top + window.scrollY;
+      const articleHeight = articleElement.offsetHeight;
       const scrollY = window.scrollY;
-      
-      const articleTop = articleContentRef.current.offsetTop;
-      const articleHeight = articleContentRef.current.offsetHeight;
-      const articleBottom = articleTop + articleHeight;
 
-      let commentsTop = Infinity;
-      if (commentsSectionRef.current) {
-        commentsTop = commentsSectionRef.current.offsetTop;
-      }
+      // La percentuale avanza da 0 a 100 in base allo scorrimento dentro la colonna
+      // principale dell'articolo, invece di contare l'altezza della finestra.
+      const scrolled = scrollY - articleTop;
+      const progress =
+        articleHeight > 0
+          ? Math.max(0, Math.min(100, (scrolled / articleHeight) * 100))
+          : 0;
 
-      let progress = 0;
-      if (scrollY + windowHeight > articleTop) {
-        const scrolledPastArticleStart = (scrollY + windowHeight) - articleTop;
-        progress = (scrolledPastArticleStart / articleHeight) * 100;
-      }
-      
-      progress = Math.max(0, Math.min(100, progress));
       setReadingProgress(progress);
 
-      if (scrollY + windowHeight > commentsTop + 100) {
-        setShowProgressBar(false);
+      // Nasconde la barra quando si raggiunge la sezione dei commenti,
+      // se il relativo elemento è disponibile.
+      if (commentsSectionRef.current) {
+        const commentsTop =
+          commentsSectionRef.current.getBoundingClientRect().top + window.scrollY;
+        setShowProgressBar(scrollY + window.innerHeight < commentsTop + 100);
       } else {
         setShowProgressBar(true);
       }
     };
 
-    window.addEventListener('scroll', handleScroll);
+    // Aggiorna la barra durante lo scroll e subito dopo il caricamento dell'articolo.
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('resize', handleScroll);
     handleScroll();
 
-    return () => window.removeEventListener('scroll', handleScroll);
+    return () => {
+      // Rimuove gli eventi quando il componente viene smontato o aggiornato.
+      window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('resize', handleScroll);
+    };
   }, [article, loading]);
-  // ------------------------------------------
+  // ----------------------------------------------------------
 
   useEffect(() => {
     if (commentsList.length > 0 && window.location.hash) {
