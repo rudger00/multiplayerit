@@ -2,6 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuth } from '../context/AuthContext';
+<<<<<<< HEAD
+=======
+import { apiUrl } from '../utils/api';
+>>>>>>> 51807423c251ce13a536e1b09fa0da8a60534b67
 
 export default function PaginaAdmin() {
   const { user } = useAuth();
@@ -91,42 +95,71 @@ export default function PaginaAdmin() {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
 
+<<<<<<< HEAD
       await fetch('http://localhost:3001/api/admin/articles/approve', {
+=======
+      await fetch(apiUrl('/api/admin/articles/status'), {
+>>>>>>> 51807423c251ce13a536e1b09fa0da8a60534b67
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
+<<<<<<< HEAD
         body: JSON.stringify({ id_articolo: art.id, id_autore: art.id_autore, titolo: art.titolo })
+=======
+        body: JSON.stringify({ id_articolo: art.id, new_status: 'PUBLISHED' })
+>>>>>>> 51807423c251ce13a536e1b09fa0da8a60534b67
       });
       fetchPendingArticles();
     }
   };
 
   const handleReject = async (art) => {
+<<<<<<< HEAD
     if(window.confirm(`Sei sicuro di voler rifiutare ed eliminare la bozza "${art.titolo}"?`)) {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
 
       await fetch('http://localhost:3001/api/admin/articles/reject', {
         method: 'DELETE',
+=======
+    if(window.confirm(`Sei sicuro di voler rifiutare la bozza "${art.titolo}"?`)) {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+
+      await fetch(apiUrl('/api/admin/articles/status'), {
+        method: 'POST',
+>>>>>>> 51807423c251ce13a536e1b09fa0da8a60534b67
         headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
+<<<<<<< HEAD
         body: JSON.stringify({ id_articolo: art.id, id_autore: art.id_autore, titolo: art.titolo })
+=======
+        body: JSON.stringify({ id_articolo: art.id, new_status: 'REJECTED' })
+>>>>>>> 51807423c251ce13a536e1b09fa0da8a60534b67
       });
       fetchPendingArticles();
     }
   };
 
   const handleWarnUser = async (idUtente, currentWarns) => {
+<<<<<<< HEAD
     if(!window.confirm("Vuoi aggiungere un'ammonizione a questo utente? (Al 2° cartellino verrà bannato)")) return;
+=======
+    if(!window.confirm("Vuoi aggiungere un'ammonizione a questo utente? (Al raggiungimento di 3 ammonizioni verrà bannato)")) return;
+>>>>>>> 51807423c251ce13a536e1b09fa0da8a60534b67
     
     const { data: sessionData } = await supabase.auth.getSession();
     const token = sessionData.session?.access_token;
 
+<<<<<<< HEAD
     await fetch('http://localhost:3001/api/admin/users/warn', {
+=======
+    await fetch(apiUrl('/api/admin/users/warn'), {
+>>>>>>> 51807423c251ce13a536e1b09fa0da8a60534b67
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
@@ -143,7 +176,11 @@ export default function PaginaAdmin() {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
 
+<<<<<<< HEAD
       await fetch('http://localhost:3001/api/admin/users/toggle-ban', {
+=======
+      await fetch(apiUrl('/api/admin/users/toggle-ban'), {
+>>>>>>> 51807423c251ce13a536e1b09fa0da8a60534b67
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -161,7 +198,11 @@ export default function PaginaAdmin() {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
 
+<<<<<<< HEAD
       await fetch('http://localhost:3001/api/admin/reports/update-status', {
+=======
+      await fetch(apiUrl('/api/admin/reports/update-status'), {
+>>>>>>> 51807423c251ce13a536e1b09fa0da8a60534b67
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',

@@ -83,7 +83,15 @@ router.post('/gemini/chat', async (req, res) => {
   if (!userText || typeof userText !== 'string' || userText.length > 500) {
     return res.status(400).json({ error: "Testo non valido o troppo lungo." });
   }
+<<<<<<< HEAD
   if (!Array.isArray(messages) || messages.length > 50) {
+=======
+  if (!Array.isArray(messages) || messages.length > 50 || messages.some((message) =>
+    !message || typeof message !== 'object' ||
+    typeof message.sender !== 'string' || !['user', 'bot', 'assistant'].includes(message.sender) ||
+    typeof message.text !== 'string' || message.text.length > 2000
+  )) {
+>>>>>>> 51807423c251ce13a536e1b09fa0da8a60534b67
     return res.status(400).json({ error: "Storico messaggi non valido." });
   }
 

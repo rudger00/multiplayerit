@@ -112,6 +112,7 @@ export default function PaginaArticolo() {
     fetchData();
   }, [id, user, navigate]); 
 
+<<<<<<< HEAD
   // --- EFFETTO PER LA BARRA DI AVANZAMENTO DELLA LETTURA ---
   useEffect(() => {
     const handleScroll = () => {
@@ -143,11 +144,42 @@ export default function PaginaArticolo() {
         const commentsTop =
           commentsSectionRef.current.getBoundingClientRect().top + window.scrollY;
         setShowProgressBar(scrollY + window.innerHeight < commentsTop + 100);
+=======
+  // --- EFFETTO PER LA READING PROGRESS BAR ---
+  useEffect(() => {
+    const handleScroll = () => {
+      if (!articleContentRef.current) return;
+
+      const windowHeight = window.innerHeight;
+      const scrollY = window.scrollY;
+      
+      const articleTop = articleContentRef.current.offsetTop;
+      const articleHeight = articleContentRef.current.offsetHeight;
+      const articleBottom = articleTop + articleHeight;
+
+      let commentsTop = Infinity;
+      if (commentsSectionRef.current) {
+        commentsTop = commentsSectionRef.current.offsetTop;
+      }
+
+      let progress = 0;
+      if (scrollY + windowHeight > articleTop) {
+        const scrolledPastArticleStart = (scrollY + windowHeight) - articleTop;
+        progress = (scrolledPastArticleStart / articleHeight) * 100;
+      }
+      
+      progress = Math.max(0, Math.min(100, progress));
+      setReadingProgress(progress);
+
+      if (scrollY + windowHeight > commentsTop + 100) {
+        setShowProgressBar(false);
+>>>>>>> 51807423c251ce13a536e1b09fa0da8a60534b67
       } else {
         setShowProgressBar(true);
       }
     };
 
+<<<<<<< HEAD
     // Aggiorna la barra durante lo scroll e subito dopo il caricamento dell'articolo.
     window.addEventListener('scroll', handleScroll, { passive: true });
     window.addEventListener('resize', handleScroll);
@@ -160,6 +192,14 @@ export default function PaginaArticolo() {
     };
   }, [article, loading]);
   // ----------------------------------------------------------
+=======
+    window.addEventListener('scroll', handleScroll);
+    handleScroll();
+
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [article, loading]);
+  // ------------------------------------------
+>>>>>>> 51807423c251ce13a536e1b09fa0da8a60534b67
 
   useEffect(() => {
     if (commentsList.length > 0 && window.location.hash) {
