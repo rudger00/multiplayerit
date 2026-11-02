@@ -18,7 +18,7 @@ const requireAdmin = async (req, res, next) => {
     const { data: { user }, error } = await supabase.auth.getUser(token);
 
     if (error || !user) {
-      console.error("💥 Token respinto da Supabase:", error?.message);
+      console.error("Token respinto da Supabase:", error?.message);
       return res.status(401).json({ error: 'Token non valido o scaduto' });
     }
 
@@ -26,14 +26,14 @@ const requireAdmin = async (req, res, next) => {
     const { rows } = await pool.query('SELECT id, id_ruolo FROM utenti WHERE id_auth = $1', [user.id]);
     
     if (rows.length === 0 || rows[0].id_ruolo !== 1) {
-      console.error("💥 ERRORE: L'utente non è un amministratore!");
+      console.error("ERRORE: L'utente non è un amministratore!");
       return res.status(403).json({ error: 'Accesso negato: Privilegi di amministratore richiesti' });
     }
 
     // 3. Tutto perfetto, diamo il via libera!
     next();
   } catch (error) {
-    console.error("💥 ERRORE INTERNO AUTENTICAZIONE:", error.message);
+    console.error("ERRORE INTERNO AUTENTICAZIONE:", error.message);
     return res.status(500).json({ error: 'Errore interno del server' });
   }
 };

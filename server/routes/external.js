@@ -28,13 +28,13 @@ router.get('/youtube/search', async (req, res) => {
     const data = await response.json();
     
     if (data.error) {
-       console.error("💥 YouTube ha rifiutato la richiesta:", data.error.message);
+       console.error("YouTube ha rifiutato la richiesta:", data.error.message);
        return res.status(500).json({ error: data.error.message });
     }
 
     res.json(data);
   } catch (error) {
-    console.error("💥 Errore di connessione YouTube:", error.message);
+    console.error("Errore di connessione YouTube:", error.message);
     res.status(500).json({ error: 'Errore interno del server (YouTube API)' });
   }
 });
@@ -60,13 +60,13 @@ router.get('/unsplash/search', async (req, res) => {
     const data = await response.json();
     
     if (data.errors) {
-       console.error("💥 Unsplash ha rifiutato la richiesta:", data.errors);
+       console.error("Unsplash ha rifiutato la richiesta:", data.errors);
        return res.status(500).json({ error: "Errore durante la ricerca immagini su Unsplash" });
     }
 
     res.json(data);
   } catch (error) {
-    console.error("💥 Errore di connessione Unsplash:", error.message);
+    console.error("Errore di connessione Unsplash:", error.message);
     res.status(500).json({ error: 'Errore interno del server (Unsplash API)' });
   }
 });
@@ -88,7 +88,7 @@ router.post('/gemini/chat', async (req, res) => {
   }
 
   if (!process.env.GEMINI_API_KEY) {
-    console.error("💥 ERRORE: Chiave Gemini mancante nel file .env del server");
+    console.error("ERRORE: Chiave Gemini mancante nel file .env del server");
     return res.status(500).json({ error: "Chiave API mancante" });
   }
 
@@ -110,7 +110,7 @@ router.post('/gemini/chat', async (req, res) => {
     res.json({ reply: result.response.text() });
     
   } catch (error) {
-    console.error(`💥 ERRORE API GEMINI (modello: ${GEMINI_MODEL}):`, error.message);
+    console.error(`ERRORE API GEMINI (modello: ${GEMINI_MODEL}):`, error.message);
     res.status(500).json({ error: "Errore durante la generazione della risposta." });
   }
 });
