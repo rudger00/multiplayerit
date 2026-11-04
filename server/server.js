@@ -43,5 +43,5 @@ app.use('/api/admin', adminRoutes);
 
 // Avvio Server
 app.listen(port, () => {
-  console.log(`✅ Server backend in esecuzione sulla porta ${port}`);
+  console.log(`Server backend in esecuzione sulla porta ${port}`);
 });
