@@ -17,7 +17,7 @@ export default function ArticleCard({ article, heightClass, titleClass, showComm
       <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent"></div>
       {showComments && (
         <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm text-white text-[11px] px-2 py-0.5 flex items-center gap-1 z-10 font-bold">
-          💬 {article.commenti ?? 0}
+           {article.commenti ?? 0}
         </div>
       )}
       <div className="absolute bottom-0 left-0 p-4 w-full z-10">
