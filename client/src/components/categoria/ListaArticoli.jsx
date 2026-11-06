@@ -26,7 +26,7 @@ export default function ListaArticoli({ articles, isRecensioni, catInfo, getCate
               
               <div className="relative w-[180px] h-[100px] shrink-0 overflow-hidden rounded-sm">
                 <img src={getImg(item.url_immagine)} alt={item.titolo} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                <div className="absolute top-1 right-1 bg-[#ff2020] text-white text-[10px] font-black px-1.5 py-0.5 flex items-center gap-1 rounded-sm">💬 {item.commenti ?? 0}</div>
+                <div className="absolute top-1 right-1 bg-[#ff2020] text-white text-[10px] font-black px-1.5 py-0.5 flex items-center gap-1 rounded-sm"> {item.commenti ?? 0}</div>
               </div>
               
               <div className="flex flex-col justify-start">

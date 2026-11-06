@@ -79,7 +79,7 @@ export default function FeedLayout({ articles = [], showIntro = null, notiziePiu
                   <Link to={`/articolo/${news.id}`} key={news.id} className="flex gap-4 py-4 border-b border-gray-200 dark:border-gray-800/60 hover:bg-white dark:hover:bg-[#1a1a1a] cursor-pointer group transition-colors block">
                     <div className="relative w-[130px] h-[75px] shrink-0 overflow-hidden rounded-sm">
                       <img src={getImg(news.url_immagine)} alt={news.titolo} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                      <div className="absolute top-1 right-1 bg-red-600 text-white text-[9px] font-bold px-1.5 flex items-center gap-1 shadow-sm">💬 {news.commenti ?? 0}</div>
+                      <div className="absolute top-1 right-1 bg-red-600 text-white text-[9px] font-bold px-1.5 flex items-center gap-1 shadow-sm"> {news.commenti ?? 0}</div>
                     </div>
                     <div className="flex flex-col justify-start">
                       <p className="text-[9px] font-bold text-gray-400 dark:text-gray-500 uppercase mb-1.5 tracking-wider">
